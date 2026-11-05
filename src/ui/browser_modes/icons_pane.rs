@@ -258,6 +258,9 @@ fn icons_scroll(
     if let Some(enter_target) = &context.enter_target {
         attach_in_place(enter_target, section, &scroll);
     }
+    if context.layout == IconsLayout::Compact {
+        wheel_scrolls_sideways(&scroll);
+    }
     crate::ui::scrolling::popover::dismiss_on_outside_scroll(thumbnail_popover);
     let refresh = IconsScrollRefresh {
         browser: Rc::downgrade(&context.browser),
@@ -282,6 +285,42 @@ fn icons_scroll(
         pin_view_lines(&context, &view, extent);
     });
     scroll
+}
+
+/// Compact columns only scroll sideways, so a plain wheel moves them too.
+pub(super) fn wheel_scrolls_sideways(scroll: &gtk::ScrolledWindow) {
+    let wheel = gtk::EventControllerScroll::new(gtk::EventControllerScrollFlags::BOTH_AXES);
+    // The grid's own scrolled window would otherwise take the vertical steps it ignores.
+    wheel.set_propagation_phase(gtk::PropagationPhase::Capture);
+    let adjustment = scroll.hadjustment();
+    wheel.connect_scroll(move |wheel, dx, dy| sideways_wheel_step(wheel, &adjustment, dx, dy));
+    scroll.add_controller(wheel);
+}
+
+fn sideways_wheel_step(
+    wheel: &gtk::EventControllerScroll,
+    adjustment: &gtk::Adjustment,
+    dx: f64,
+    dy: f64,
+) -> glib::Propagation {
+    // Ctrl+wheel zooms.
+    if wheel
+        .current_event_state()
+        .contains(gtk::gdk::ModifierType::CONTROL_MASK)
+    {
+        return glib::Propagation::Proceed;
+    }
+    let delta = if dx.abs() > dy.abs() { dx } else { dy };
+    if delta == 0.0 {
+        return glib::Propagation::Proceed;
+    }
+    let step = crate::ui::scrolling::popover::scroll_delta_for_unit(
+        delta,
+        adjustment.page_size(),
+        wheel.unit(),
+    );
+    crate::ui::scrolling::advance(adjustment, step);
+    glib::Propagation::Stop
 }
 
 fn pin_view_lines(context: &IconsContext, view: &gtk::Widget, extent: i32) {

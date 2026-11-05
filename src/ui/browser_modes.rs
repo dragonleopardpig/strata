@@ -90,7 +90,7 @@ pub(super) use thumbnail_size::ThumbnailResize;
 use {
     crate::model::{FileEntry, MetadataValue, SortDirection, SortKey},
     clicks::move_range_origin,
-    icons_pane::{configure_compact_view, density_icons_columns},
+    icons_pane::{configure_compact_view, density_icons_columns, wheel_scrolls_sideways},
     scroll_settle::{ScrollSettle, install_scroll_refresh},
     selection::bitset_positions,
     type_groups::TypeGroupSorter,

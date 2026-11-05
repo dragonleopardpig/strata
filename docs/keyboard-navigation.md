@@ -392,7 +392,8 @@ In Icons and List, plain arrows move interface focus rather than changing direct
 | Enter | Open the current item | Open the current item | Open the current item |
 
 Compact lists entries down a column and wraps into the next column to the right,
-so its listing scrolls sideways. It is the Icons pane laid out as single lines:
+so its listing scrolls sideways, also with a plain mouse wheel. It is the Icons
+pane laid out as single lines:
 selection, marquee selection, drag and drop, rename, and filtering work as in
 Icons, and items open as the **Icons view** row under **Settings → General →
 Opening items** sets. It has no thumbnail size; its icons grow from 16 px to
