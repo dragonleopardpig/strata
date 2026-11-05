@@ -240,6 +240,7 @@
   "Content": "Tartalom",
   "Frame": "Keret",
   "Compact": "Kompakt",
+  "view_mode.compact": "Kompakt",
   "Compact sidebar (%{keys})": "Kompakt oldalsáv (%{keys})",
   "Complete": "Befejezés",
   "Complete setup": "Beállítás befejezése",

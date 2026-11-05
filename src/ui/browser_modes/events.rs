@@ -103,6 +103,7 @@ impl ModeViews {
             BrowserMode::Columns => {}
             BrowserMode::Icons => self.rebuild_icons(),
             BrowserMode::List => self.rebuild_list(),
+            BrowserMode::Compact => self.rebuild_compact(),
         }
     }
 
@@ -180,7 +181,7 @@ impl ModeViews {
         let Some(focused) = section.view.root().and_then(|root| root.focus()) else {
             return false;
         };
-        if self.mode == BrowserMode::Icons && focused.is_ancestor(&section.view) {
+        if self.mode.is_grid() && focused.is_ancestor(&section.view) {
             return true;
         }
         section
@@ -195,7 +196,7 @@ impl ModeViews {
             BrowserMode::List => {
                 self.update_panes(depth, |pane| update_bound_list_metadata(pane, updates));
             }
-            BrowserMode::Icons => {
+            BrowserMode::Icons | BrowserMode::Compact => {
                 self.update_panes(depth, |pane| update_bound_icons_metadata(pane, updates));
             }
             BrowserMode::Columns => {}

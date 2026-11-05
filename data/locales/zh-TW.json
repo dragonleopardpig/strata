@@ -230,6 +230,7 @@
   "Content": "內容",
   "Frame": "框架",
   "Compact": "精簡",
+  "view_mode.compact": "精簡",
   "Compact sidebar (%{keys})": "精簡側邊欄 (%{keys})",
   "Complete": "完成",
   "Complete setup": "完成設定",

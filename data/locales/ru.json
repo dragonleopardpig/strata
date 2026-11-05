@@ -240,6 +240,7 @@
   "Content": "Контент",
   "Frame": "Рамка",
   "Compact": "Компактная",
+  "view_mode.compact": "Компактный",
   "Compact sidebar (%{keys})": "Свернуть боковую панель (%{keys})",
   "Complete": "Готово",
   "Complete setup": "Завершить настройку",

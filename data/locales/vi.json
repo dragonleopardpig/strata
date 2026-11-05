@@ -240,6 +240,7 @@
   "Content": "Nội dung",
   "Frame": "Khung",
   "Compact": "Gọn",
+  "view_mode.compact": "Gọn",
   "Compact sidebar (%{keys})": "Thu gọn thanh bên (%{keys})",
   "Complete": "Hoàn tất",
   "Complete setup": "Hoàn tất thiết lập",

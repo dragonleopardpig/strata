@@ -240,6 +240,7 @@
   "Content": "Conteúdo",
   "Frame": "Moldura",
   "Compact": "Compacta",
+  "view_mode.compact": "Compacta",
   "Compact sidebar (%{keys})": "Compactar a barra lateral (%{keys})",
   "Complete": "Concluído",
   "Complete setup": "Concluir configuração",

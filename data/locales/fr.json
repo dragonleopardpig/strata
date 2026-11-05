@@ -240,6 +240,7 @@
   "Content": "Contenu",
   "Frame": "Cadre",
   "Compact": "Compacte",
+  "view_mode.compact": "Compacte",
   "Compact sidebar (%{keys})": "Réduire la barre latérale (%{keys})",
   "Complete": "Terminé",
   "Complete setup": "Terminer la configuration",

@@ -148,7 +148,13 @@ fn assert_saved_browsing(manager: &PreferenceManager) {
         ),
         "(mode, density, frame density, group by type)"
     );
-    for mode in [BrowserMode::Columns, BrowserMode::Icons, BrowserMode::List] {
+    // Compact reads the Icons click settings.
+    for mode in [
+        BrowserMode::Columns,
+        BrowserMode::Icons,
+        BrowserMode::List,
+        BrowserMode::Compact,
+    ] {
         let activation = manager.click_activation(mode);
         assert_eq!(activation.files, ClickCount::One);
         assert_eq!(

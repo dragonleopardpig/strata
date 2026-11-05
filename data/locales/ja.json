@@ -240,6 +240,7 @@
   "Content": "コンテンツ",
   "Frame": "フレーム",
   "Compact": "コンパクト",
+  "view_mode.compact": "コンパクト",
   "Compact sidebar (%{keys})": "サイドバーをコンパクト表示（%{keys}）",
   "Complete": "完了",
   "Complete setup": "セットアップを完了",

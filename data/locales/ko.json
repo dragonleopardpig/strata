@@ -240,6 +240,7 @@
   "Content": "콘텐츠",
   "Frame": "프레임",
   "Compact": "컴팩트",
+  "view_mode.compact": "컴팩트",
   "Compact sidebar (%{keys})": "사이드바 간소화(%{keys})",
   "Complete": "완료",
   "Complete setup": "설정 완료",

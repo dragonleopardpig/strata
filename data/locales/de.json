@@ -240,6 +240,7 @@
   "Content": "Inhalt",
   "Frame": "Rahmen",
   "Compact": "Kompakt",
+  "view_mode.compact": "Kompakt",
   "Compact sidebar (%{keys})": "Seitenleiste verkleinern (%{keys})",
   "Complete": "Abgeschlossen",
   "Complete setup": "Einrichtung abschließen",

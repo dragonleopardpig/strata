@@ -240,6 +240,7 @@
   "Content": "内容",
   "Frame": "框架",
   "Compact": "紧凑",
+  "view_mode.compact": "紧凑",
   "Compact sidebar (%{keys})": "紧凑显示侧边栏（%{keys}）",
   "Complete": "已完成",
   "Complete setup": "完成设置",

@@ -240,6 +240,7 @@
   "Content": "Content",
   "Frame": "Frame",
   "Compact": "Compact",
+  "view_mode.compact": "Compact",
   "Compact sidebar (%{keys})": "Compact sidebar (%{keys})",
   "Complete": "Complete",
   "Complete setup": "Complete setup",

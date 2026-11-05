@@ -492,3 +492,86 @@ fn control_click_moves_the_shift_range_origin_to_the_clicked_row() {
         },
     );
 }
+
+fn press_arrow(view: &gtk::Widget, key: gdk::Key) {
+    let controllers = view.observe_controllers();
+    let shortcut = (0..controllers.n_items())
+        .filter_map(|index| {
+            controllers
+                .item(index)
+                .and_downcast::<gtk::ShortcutController>()
+        })
+        .flat_map(|controller| {
+            (0..controller.n_items())
+                .filter_map(move |index| controller.item(index).and_downcast::<gtk::Shortcut>())
+        })
+        .find(|shortcut| {
+            shortcut
+                .trigger()
+                .and_downcast::<gtk::KeyvalTrigger>()
+                .is_some_and(|trigger| trigger.keyval() == key && trigger.modifiers().is_empty())
+        })
+        .expect("the collection binds the arrow");
+    assert!(shortcut.action().expect("binding action").activate(
+        gtk::ShortcutActionFlags::EXCLUSIVE,
+        view,
+        shortcut.arguments().as_ref(),
+    ));
+}
+
+#[test]
+fn compact_arrows_move_down_a_column_and_across_to_the_next() {
+    crate::test_support::gtk_test(
+        "ui::browser_modes::tests::compact_arrows_move_down_a_column_and_across_to_the_next",
+        || {
+            let model = gtk::StringList::new(&["a", "b", "c", "d", "e", "f", "g", "h"]);
+            let selection = gtk::MultiSelection::new(Some(model));
+            let factory = gtk::SignalListItemFactory::new();
+            factory.connect_setup(|_, object| {
+                let item = object.downcast_ref::<gtk::ListItem>().expect("list item");
+                let label = gtk::Label::new(Some("Item"));
+                label.set_size_request(80, 40);
+                item.set_child(Some(&label));
+            });
+            let grid = gtk::GridView::new(Some(selection.clone()), Some(factory));
+            configure_compact_view(&grid);
+            // Three entries per column: a, b, c | d, e, f | g, h.
+            grid.set_max_columns(3);
+            let window = gtk::Window::builder()
+                .child(&grid)
+                .default_width(600)
+                .default_height(400)
+                .build();
+            window.present();
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+            while grid.width() == 0 {
+                glib::MainContext::default().iteration(false);
+                assert!(std::time::Instant::now() < deadline, "grid never allocated");
+            }
+            grid.scroll_to(
+                0,
+                gtk::ListScrollFlags::FOCUS | gtk::ListScrollFlags::SELECT,
+                None,
+            );
+            let view = grid.clone().upcast::<gtk::Widget>();
+            for (key, expected) in [
+                (gdk::Key::Down, 1),
+                (gdk::Key::Down, 2),
+                (gdk::Key::Right, 5),
+                (gdk::Key::Right, 7),
+                (gdk::Key::Up, 6),
+                (gdk::Key::Left, 3),
+                (gdk::Key::Left, 0),
+                (gdk::Key::Left, 0),
+            ] {
+                press_arrow(&view, key);
+                assert_eq!(
+                    bitset_positions(&selection.selection()),
+                    [expected],
+                    "{key:?}"
+                );
+            }
+            window.close();
+        },
+    );
+}

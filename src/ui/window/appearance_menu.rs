@@ -154,7 +154,7 @@ pub(in crate::ui) fn build_appearance_menu(
     shell.finish(&button_icon)
 }
 
-fn mode_options(current_mode: BrowserMode) -> [ModeOption; 3] {
+fn mode_options(current_mode: BrowserMode) -> [ModeOption; 4] {
     [
         (
             crate::assets::icons::COLUMNS,
@@ -163,6 +163,11 @@ fn mode_options(current_mode: BrowserMode) -> [ModeOption; 3] {
         ),
         (crate::assets::icons::ICONS, "Icons", BrowserMode::Icons),
         (crate::assets::icons::LIST, "List", BrowserMode::List),
+        (
+            crate::assets::icons::COMPACT,
+            "view_mode.compact",
+            BrowserMode::Compact,
+        ),
     ]
     .map(|(icon, label, mode)| {
         let option = appearance_option(OptionSpec {
@@ -528,6 +533,7 @@ fn browser_mode_icon(mode: BrowserMode) -> &'static str {
         BrowserMode::Columns => crate::assets::icons::COLUMNS,
         BrowserMode::Icons => crate::assets::icons::ICONS,
         BrowserMode::List => crate::assets::icons::LIST,
+        BrowserMode::Compact => crate::assets::icons::COMPACT,
     }
 }
 
