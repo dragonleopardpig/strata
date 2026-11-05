@@ -81,6 +81,31 @@ and conflict handling apply. Escape cancels a file drag before it dismisses
 anything else: nothing transfers on release, and the selection, preview, and
 filter stay as they were.
 
+## Extra pane
+
+**F3** shows or hides Nemo's extra pane in the current tab: a second pane beside
+the first, opened on the same folder with its own navigation history,
+selection, view and sort. A click or keyboard focus inside a pane makes it the
+active pane, and **F6** switches to the other one. The active pane's caption
+above its files carries the accent color; each caption names its pane's folder.
+The location bar, sidebar places, Back and Forward, search, the Appearance
+menu's view switch, the preview panel, the footer, and the tab label and window
+title all follow the active pane. While both panes show, switching views changes
+only the active pane and is not saved as the default view.
+
+**Ctrl+Shift+C** copies and **Ctrl+Shift+X** moves the active pane's selection
+into the other pane's folder, with the usual progress, undo and conflict
+handling; the item context menu offers **Copy to Other Pane** and **Move to
+Other Pane** while both panes show. Commander-style **F5** stays Refresh. These
+keys leave a focused text field alone, and none of the pane keys act while a
+rename is open. Dragging files from one pane to the other copies or moves them
+as any file drag does.
+
+**F3** again closes the extra pane. When it was the active pane, the remaining
+pane takes over its folder, view and selection, so the folder you were working
+in stays open. The extra pane is not restored when Strata restarts. Rebind the
+four keys in **Settings → Keyboard**.
+
 ## Input precedence
 
 The last navigation input determines the destination of Ctrl+V:
