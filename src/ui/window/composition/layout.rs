@@ -11,7 +11,7 @@ use crate::{
     adapters::LocalPreviewProvider,
     assets::{self, icons},
     ui::{
-        browser::BrowserView,
+        browser::{BrowserView, PaneTarget},
         marquee::OriginClick,
         preferences::PreferenceManager,
         preview::PreviewDrawer,
@@ -21,12 +21,14 @@ use crate::{
 };
 
 use super::super::{
-    MIN_SIDEBAR_WIDTH, SIDEBAR_WIDTH, SidebarView, animate_sidebar, build_appearance_menu,
+    MIN_SIDEBAR_WIDTH, SIDEBAR_WIDTH, SidebarView, animate_sidebar, build_pane_appearance_menu,
     pin_status, sidebar_rail_width,
 };
 
 pub(super) struct Header {
     widget: gtk::HeaderBar,
+    /// The active pane's location bar; each pane adds its own.
+    pub(super) locations: gtk::Stack,
     pub(super) actions: gtk::Box,
     pub(super) new_tab: gtk::Button,
     pub(super) content: gtk::Box,
@@ -43,7 +45,7 @@ pub(super) struct Header {
 impl Header {
     pub(super) fn new(
         window: &gtk::ApplicationWindow,
-        browser: &BrowserView,
+        target: &PaneTarget,
         preview: &PreviewDrawer,
         preferences: &Rc<PreferenceManager>,
     ) -> Self {
@@ -69,15 +71,19 @@ impl Header {
                 preferences.set_sidebar_expanded(toggle.is_active());
             });
         }
-        let location = browser.location_widget();
-        location.set_hexpand(true);
+        let locations = gtk::Stack::builder()
+            .hhomogeneous(false)
+            .vhomogeneous(false)
+            .hexpand(true)
+            .transition_type(gtk::StackTransitionType::None)
+            .build();
+        locations.add_child(&target.view().location_widget());
         let search = header_action(icons::SEARCH, "");
         let search_keys = crate::ui::keys::Keys::One(crate::ui::keys::bindings::SEARCH.shown());
         crate::ui::shortcut_reference::follow_tooltip(&search, "Search (%{keys})", search_keys);
         crate::ui::shortcut_reference::follow_label(&search, "Search (%{keys})", search_keys);
         crate::ui::tenxer_mode::hide_while_enabled(&search);
-        let appearance =
-            build_appearance_menu(browser, &browser.browser(), preferences.clone(), preview);
+        let appearance = build_pane_appearance_menu(target, preferences.clone(), preview);
         let settings_label = crate::i18n::tr("Settings");
         let settings = header_action(icons::SETTINGS, &settings_label);
         crate::ui::accessibility::set_label(&settings, &settings_label);
@@ -143,11 +149,12 @@ impl Header {
         content.set_hexpand(true);
         content.set_valign(gtk::Align::Center);
         content.append(&sidebar_toggle);
-        content.append(&location);
+        content.append(&locations);
         content.append(&actions);
         widget.set_title_widget(Some(&content));
         Self {
             widget,
+            locations,
             content,
             sidebar_toggle,
             search,
@@ -209,23 +216,25 @@ pub(super) fn preview(browser: &BrowserView, preferences: &Rc<PreferenceManager>
     preview
 }
 
+/// What the tab's chrome lays out around its panes.
+pub(super) struct PaneArea<'a> {
+    pub(super) target: &'a PaneTarget,
+    pub(super) panes: &'a gtk::Widget,
+    pub(super) footers: &'a gtk::Stack,
+}
+
 pub(super) fn browser_layout(
-    browser: &BrowserView,
+    area: &PaneArea<'_>,
     preview: &PreviewDrawer,
     sidebar: &SidebarView,
     header: &Header,
     preferences: &Rc<PreferenceManager>,
 ) -> gtk::Box {
+    let browser = &area.target.view();
     let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
     root.append(&header.widget);
     bind_pin_handlers(browser, sidebar);
-    let content = browser_split(
-        browser,
-        sidebar,
-        &header.sidebar_toggle,
-        preview,
-        preferences,
-    );
+    let content = browser_split(area, sidebar, &header.sidebar_toggle, preview, preferences);
     let preview_split = gtk::Paned::new(gtk::Orientation::Horizontal);
     preview_split.add_css_class("preview-split");
     // The column beside the divider keeps its resize edge; the preview grip moves it.
@@ -239,16 +248,18 @@ pub(super) fn browser_layout(
     preview_split.set_position(i32::MAX);
     preview_split.set_vexpand(true);
     preview.attach_split(&preview_split, &content, browser, Some(sidebar));
-    browser.add_marquee_origin(
+    BrowserView::add_pane_marquee_origin(
+        area.target,
         &preview.widget(),
         gtk::PackType::End,
         OriginClick::keeps_selection_within(&preview.pane_widget()),
     );
     root.append(&preview_split);
+    root.append(area.footers);
     root
 }
 
-fn bind_pin_handlers(browser: &BrowserView, sidebar: &SidebarView) {
+pub(super) fn bind_pin_handlers(browser: &BrowserView, sidebar: &SidebarView) {
     let weak_pin_sidebar = Rc::downgrade(&sidebar.state);
     let weak_unpin_sidebar = Rc::downgrade(&sidebar.state);
     let pinned_places = sidebar.state.pinned_places.clone();
@@ -270,7 +281,7 @@ fn bind_pin_handlers(browser: &BrowserView, sidebar: &SidebarView) {
 }
 
 fn browser_split(
-    browser: &BrowserView,
+    area: &PaneArea<'_>,
     sidebar: &SidebarView,
     toggle: &SidebarToggle,
     preview: &PreviewDrawer,
@@ -285,13 +296,14 @@ fn browser_split(
     content.set_position(SIDEBAR_WIDTH);
     content.set_vexpand(true);
     sidebar.widget.set_size_request(MIN_SIDEBAR_WIDTH, -1);
-    browser.add_marquee_origin(
+    BrowserView::add_pane_marquee_origin(
+        area.target,
         &sidebar.widget,
         gtk::PackType::Start,
         OriginClick::ClearsSelection,
     );
     content.set_start_child(Some(&sidebar.widget));
-    content.set_end_child(Some(&browser.widget()));
+    content.set_end_child(Some(area.panes));
     bind_sidebar_toggle(&content, sidebar, toggle, preview);
     bind_sidebar_modes(sidebar, toggle, preferences);
     super::super::bind_sidebar_text_size(&content, sidebar);
@@ -436,9 +448,10 @@ pub(super) struct FooterBinding {
 }
 
 impl FooterBinding {
+    /// The footer of one pane, added to the tab's stack of pane footers.
     pub(super) fn new(
         window: &gtk::ApplicationWindow,
-        root: &gtk::Box,
+        footers: &gtk::Stack,
         browser: &BrowserView,
         preferences: &PreferenceManager,
     ) -> Self {
@@ -450,7 +463,7 @@ impl FooterBinding {
         shortcuts.set_activity(jobs.widget());
         let clipboard = window.clipboard();
         let clipboard_handler = RefCell::new(Some(shortcuts.connect_clipboard(&clipboard)));
-        root.append(shortcuts.widget());
+        footers.add_child(shortcuts.widget());
         let updated_shortcuts = shortcuts.clone();
         browser.connect_view_mode_changed(move |mode| updated_shortcuts.set_mode(mode));
         Self {

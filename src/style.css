@@ -2668,6 +2668,33 @@ paned > separator {
   background: @strata_accent;
 }
 
+/* The extra pane: each pane names its folder, and the active one's caption
+   carries the accent. */
+.dual-pane > separator {
+  min-width: 1px;
+  background: alpha(@strata_border, 0.6);
+  background-image: none;
+  box-shadow: none;
+}
+
+.dual-pane > separator:hover {
+  background: @strata_accent;
+}
+
+.pane-caption {
+  padding: 3px 10px;
+  font-size: 0.85em;
+  color: @strata_dim_text;
+  box-shadow: inset 0 -1px alpha(@strata_border, 0.6);
+}
+
+.browser-pane.active-pane > .pane-caption {
+  color: @strata_accent;
+  font-weight: 600;
+  background: alpha(@strata_accent, 0.08);
+  box-shadow: inset 0 -2px @strata_accent;
+}
+
 .preview-resize-grip {
   background: transparent;
 }
