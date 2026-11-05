@@ -2670,15 +2670,16 @@ paned > separator {
 
 /* The extra pane: each pane names its folder, and the active one's caption
    carries the accent. */
+/* GTK's handle reaches into the end pane for grabbing; only its first pixel
+   is drawn, so the line stays thin above the transparent caption. */
 .dual-pane > separator {
   min-width: 1px;
-  background: alpha(@strata_border, 0.6);
-  background-image: none;
-  box-shadow: none;
+  background: none;
+  box-shadow: inset 1px 0 alpha(@strata_border, 0.6);
 }
 
 .dual-pane > separator:hover {
-  background: @strata_accent;
+  box-shadow: inset 1px 0 @strata_accent;
 }
 
 .pane-caption {
