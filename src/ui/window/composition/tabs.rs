@@ -276,6 +276,7 @@ impl TabWindow {
         self.next_id.set(id + 1);
         let content = Rc::new(WindowContent::new(&window, &self.preferences));
         content.bind_context(&window, &self.preferences);
+        super::pane_controls::bind(&content);
         let tab = Rc::new(Tab {
             id,
             content: content.clone(),

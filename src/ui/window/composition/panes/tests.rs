@@ -75,22 +75,3 @@ fn transfers_go_to_the_other_panes_folder_when_it_takes_files() {
         assert_eq!(transfer_destination(split, other), Err(refusal));
     }
 }
-
-#[test]
-fn captions_name_the_folder_with_home_as_a_tilde() {
-    let home = glib::home_dir();
-    assert_eq!(pane_caption(None), "");
-    assert_eq!(pane_caption(Some(&Location::local(&home))), "~");
-    assert_eq!(
-        pane_caption(Some(&Location::local(home.join("Music")))),
-        "~/Music"
-    );
-    assert_eq!(
-        pane_caption(Some(&Location::local("/srv/data"))),
-        "/srv/data"
-    );
-    assert_eq!(
-        pane_caption(Some(&Location::uri("sftp://host/srv/"))),
-        Location::uri("sftp://host/srv/").display_path()
-    );
-}

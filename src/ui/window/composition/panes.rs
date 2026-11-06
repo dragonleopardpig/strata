@@ -114,24 +114,12 @@ pub(super) fn transfer_destination(
     Ok(destination)
 }
 
-/// The folder a pane's caption names: its path, with the home folder as `~`.
-pub(super) fn pane_caption(location: Option<&Location>) -> String {
-    let Some(location) = location else {
-        return String::new();
-    };
-    match location.native_path() {
-        Some(path) if path == glib::home_dir() => "~".to_owned(),
-        Some(path) => crate::ui::settings::abbreviate_home(path),
-        None => location.display_path(),
-    }
-}
-
 pub(super) struct Pane {
     pub(super) view: BrowserView,
     pub(super) footer: FooterBinding,
     pub(super) input: PaneInput,
     shell: gtk::Box,
-    caption: gtk::Label,
+    location_bar: gtk::Box,
 }
 
 impl Pane {
@@ -140,26 +128,30 @@ impl Pane {
         shell.add_css_class("browser-pane");
         shell.set_hexpand(true);
         shell.set_vexpand(true);
-        let caption = gtk::Label::new(None);
-        caption.add_css_class("pane-caption");
-        caption.set_xalign(0.0);
-        caption.set_ellipsize(gtk::pango::EllipsizeMode::Middle);
-        caption.set_visible(false);
-        shell.append(&caption);
+        let location_bar = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        location_bar.add_css_class("pane-location");
+        location_bar.set_visible(false);
+        shell.append(&location_bar);
         shell.append(&view.widget());
-        let captioned = caption.downgrade();
-        view.observe_tab_location(move |location| {
-            if let Some(caption) = captioned.upgrade() {
-                caption.set_text(&pane_caption(location));
-            }
-        });
         Self {
             view,
             footer,
             input: Rc::new(Cell::new(true)),
             shell,
-            caption,
+            location_bar,
         }
+    }
+
+    fn sync_location_bar(&self, split: bool, locations: &gtk::Stack) {
+        let widget = self.view.location_widget();
+        if split && widget.parent().as_ref() == Some(locations.upcast_ref()) {
+            locations.remove(&widget);
+            self.location_bar.append(&widget);
+        } else if !split && widget.parent().as_ref() == Some(self.location_bar.upcast_ref()) {
+            self.location_bar.remove(&widget);
+            locations.add_child(&widget);
+        }
+        self.location_bar.set_visible(split);
     }
 
     fn location(&self) -> Option<Location> {
@@ -240,6 +232,10 @@ impl Panes {
 
     pub(super) fn footers(&self) -> gtk::Stack {
         self.footers.clone()
+    }
+
+    pub(super) fn is_split(&self) -> bool {
+        self.layout.get().split()
     }
 
     pub(super) fn has_extra(&self) -> bool {
@@ -416,7 +412,7 @@ impl Panes {
         for pane in self.all() {
             let is_active = Rc::ptr_eq(&pane, &active);
             pane.input.set(is_active);
-            pane.caption.set_visible(layout.split());
+            pane.sync_location_bar(layout.split(), &self.locations);
             if is_active && layout.split() {
                 pane.shell.add_css_class("active-pane");
             } else {
@@ -426,8 +422,10 @@ impl Panes {
                 pane.footer.shortcuts.cancel_chord();
             }
         }
-        self.locations
-            .set_visible_child(&active.view.location_widget());
+        if !layout.split() {
+            self.locations
+                .set_visible_child(&active.view.location_widget());
+        }
         self.footers
             .set_visible_child(active.footer.shortcuts.widget());
         self.target.activate(&active.view);

@@ -216,14 +216,16 @@ fn icons_context(
     (context, sections)
 }
 
-/// Compact results are rows: a sideways grid of hits would scatter the order.
+/// Search keeps the browsing presentation of the pane.
 fn search_presentation(context: &IconsContext) -> SearchPresentation {
     match context.layout {
         IconsLayout::Grid => SearchPresentation::Icons {
             thumbnail_size: context.thumbnail_size.clone(),
             max_columns: density_icons_columns(context.density.get()),
         },
-        IconsLayout::Compact => SearchPresentation::Rows,
+        IconsLayout::Compact => SearchPresentation::Compact {
+            thumbnail_size: context.thumbnail_size.clone(),
+        },
     }
 }
 
@@ -288,7 +290,7 @@ fn icons_scroll(
 }
 
 /// Compact columns only scroll sideways, so a plain wheel moves them too.
-pub(super) fn wheel_scrolls_sideways(scroll: &gtk::ScrolledWindow) {
+pub(in crate::ui) fn wheel_scrolls_sideways(scroll: &gtk::ScrolledWindow) {
     let wheel = gtk::EventControllerScroll::new(gtk::EventControllerScrollFlags::BOTH_AXES);
     // The grid's own scrolled window would otherwise take the vertical steps it ignores.
     wheel.set_propagation_phase(gtk::PropagationPhase::Capture);
@@ -661,7 +663,7 @@ fn configure_compact_density(pane: &Pane, context: &IconsContext, density: Brows
     }
 }
 
-pub(super) fn configure_compact_view(grid: &gtk::GridView) {
+pub(in crate::ui) fn configure_compact_view(grid: &gtk::GridView) {
     grid.set_orientation(gtk::Orientation::Horizontal);
     // Columns take their names' natural width rather than collapsing to one character.
     grid.set_hscroll_policy(gtk::ScrollablePolicy::Natural);

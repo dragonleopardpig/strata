@@ -16,6 +16,7 @@ use super::{SidebarView, TypeToSearch, keyboard};
 
 mod input;
 mod layout;
+mod pane_controls;
 mod panes;
 mod search;
 mod settings;
@@ -147,6 +148,7 @@ impl WindowContent {
                     self.build_extra_pane();
                 }
                 self.panes.toggle();
+                self.header.extra_pane.set_active(self.panes.is_split());
             }
             PaneCommand::FocusOther => self.panes.focus_other(),
             PaneCommand::CopyToOther => self.panes.transfer_to_other(false),

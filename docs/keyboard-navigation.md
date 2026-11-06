@@ -83,13 +83,14 @@ filter stay as they were.
 
 ## Extra pane
 
-**F3** shows or hides Nemo's extra pane in the current tab: a second pane beside
-the first, opened on the same folder with its own navigation history,
+The toolbar's pane toggle or **F3** shows or hides an extra pane in the current
+tab: a second pane beside the first, opened on the same folder with its own
+navigation history,
 selection, view and sort. A click or keyboard focus inside a pane makes it the
-active pane, and **F6** switches to the other one. The active pane's caption
-above its files carries the accent color; each caption names its pane's folder.
-The location bar, sidebar places, Back and Forward, search, the Appearance
-menu's view switch, the preview panel, the footer, and the tab label and window
+active pane, and **F6** switches to the other one. Each pane has its own complete
+location bar, with breadcrumbs and an editable path. The active pane's location
+bar carries the accent color. Sidebar places, Back and Forward, search, the
+Appearance menu's view switch, the preview panel, the footer, and the tab label and window
 title all follow the active pane. While both panes show, switching views changes
 only the active pane and is not saved as the default view.
 
@@ -292,6 +293,10 @@ at the next change in the open folder, or on **F5**. When the open folder is del
 moved into another folder, the view returns to its nearest parent that still exists, or
 reloads the folder if it already exists again; either way the filter ends. Neither adds a
 history entry.
+
+Compact view keeps search matches in sideways columns, with small icons and
+the source paths of recursive matches. A plain mouse wheel scrolls these
+columns horizontally, just as it does in the normal Compact listing.
 
 ## Preview while filtering
 

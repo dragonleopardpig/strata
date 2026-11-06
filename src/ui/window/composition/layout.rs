@@ -31,6 +31,7 @@ pub(super) struct Header {
     pub(super) locations: gtk::Stack,
     pub(super) actions: gtk::Box,
     pub(super) new_tab: gtk::Button,
+    pub(super) extra_pane: gtk::ToggleButton,
     pub(super) content: gtk::Box,
     pub(super) sidebar_toggle: SidebarToggle,
     pub(super) search: gtk::Button,
@@ -140,6 +141,8 @@ impl Header {
         crate::ui::accessibility::set_label(&new_tab, &crate::i18n::tr("New tab"));
         actions.append(&new_tab);
         actions.append(&search);
+        let extra_pane = super::pane_controls::toggle();
+        actions.append(&extra_pane);
         actions.append(&appearance);
         actions.append(&settings);
         actions.append(&minimize);
@@ -166,6 +169,7 @@ impl Header {
             close,
             actions,
             new_tab,
+            extra_pane,
         }
     }
 }

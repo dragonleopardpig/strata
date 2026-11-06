@@ -91,7 +91,7 @@ fn the_extra_pane_opens_on_the_active_folder_and_closing_keeps_the_active_one() 
                 assert!(is_tab_shortcut(&press(key, M::empty())), "{key:?}");
             }
             assert!(!split.content().is_split());
-            assert_eq!(split.key(Key::F3, M::empty()), glib::Propagation::Stop);
+            split.content().header.extra_pane.emit_clicked();
             assert!(split.content().is_split());
             let extra = split.active();
             assert!(!extra.ptr_eq(&split.main()), "the new pane is active");
@@ -130,6 +130,7 @@ fn the_extra_pane_opens_on_the_active_folder_and_closing_keeps_the_active_one() 
 
             split.key(Key::F3, M::empty());
             assert!(!split.content().is_split());
+            assert!(!split.content().header.extra_pane.is_active());
             assert!(split.active().ptr_eq(&split.main()));
             Split::settle_at(&split.main(), &right);
             split.await_focus_in(&split.main());
@@ -242,4 +243,56 @@ fn copy_and_move_to_the_other_pane_take_the_active_selection() {
             split.window.destroy();
         },
     );
+}
+
+#[test]
+fn both_location_bars_navigate_their_own_pane() {
+    gtk_test(
+        "ui::window::composition::tabs::tests::panes::both_location_bars_navigate_their_own_pane",
+        || {
+            let split = Split::open();
+            split.key(Key::F3, M::empty());
+            let extra = split.active();
+            let main = split.main();
+            Split::settle_at(&extra, &split.folder("left"));
+            for (view, target, other, unchanged) in [
+                (&main, split.folder("right"), &extra, split.folder("left")),
+                (
+                    &extra,
+                    Location::local(split.root.path()),
+                    &main,
+                    split.folder("right"),
+                ),
+            ] {
+                view.begin_location_edit();
+                wait_until(|| view.location_has_focus());
+                let field = location_field(&view.location_widget()).expect("location entry");
+                field.set_text(&target.display_path());
+                field.emit_activate();
+                Split::settle_at(view, &target);
+                assert_eq!(other.browser().active_location(), Some(unchanged));
+                wait_until(|| split.active().ptr_eq(view));
+            }
+            split.key(Key::F3, M::empty());
+            main.begin_location_edit();
+            wait_until(|| main.location_has_focus());
+            split.window.destroy();
+        },
+    );
+}
+
+fn location_field(widget: &gtk::Widget) -> Option<gtk::Entry> {
+    if let Some(entry) = widget.downcast_ref::<gtk::Entry>()
+        && entry.has_css_class("location-entry")
+    {
+        return Some(entry.clone());
+    }
+    let mut child = widget.first_child();
+    while let Some(widget) = child {
+        if let Some(entry) = location_field(&widget) {
+            return Some(entry);
+        }
+        child = widget.next_sibling();
+    }
+    None
 }

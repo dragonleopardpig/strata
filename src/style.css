@@ -2668,10 +2668,9 @@ paned > separator {
   background: @strata_accent;
 }
 
-/* The extra pane: each pane names its folder, and the active one's caption
-   carries the accent. */
+/* Each split pane owns its location controls; the active pane carries the accent. */
 /* GTK's handle reaches into the end pane for grabbing; only its first pixel
-   is drawn, so the line stays thin above the transparent caption. */
+   is drawn, so the line stays thin above the location controls. */
 .dual-pane > separator {
   min-width: 1px;
   background: none;
@@ -2682,14 +2681,12 @@ paned > separator {
   box-shadow: inset 1px 0 @strata_accent;
 }
 
-.pane-caption {
+.pane-location {
   padding: 3px 10px;
-  font-size: 0.85em;
-  color: @strata_dim_text;
   box-shadow: inset 0 -1px alpha(@strata_border, 0.6);
 }
 
-.browser-pane.active-pane > .pane-caption {
+.browser-pane.active-pane > .pane-location {
   color: @strata_accent;
   font-weight: 600;
   background: alpha(@strata_accent, 0.08);

@@ -74,6 +74,7 @@ pub(crate) use filter::filter_controls;
 use focus::{collection_keeps_cursor, focus_bound_cursor, focus_collection_item};
 pub(super) use icons_controls::disable_scale_long_press_zoom;
 use icons_pane::{DEFAULT_ICONS_THUMBNAIL_SIZE, configure_icons_density};
+pub(in crate::ui) use icons_pane::{configure_compact_view, wheel_scrolls_sideways};
 use list_columns::{ListColumnLayout, apply_columns_layout, register_list_column_cell};
 use list_pane::{assemble_list_row, list_row_parts};
 use metadata::{entry_mode, entry_type, metadata_fill_position, set_label_if_changed};
@@ -90,7 +91,7 @@ pub(super) use thumbnail_size::ThumbnailResize;
 use {
     crate::model::{FileEntry, MetadataValue, SortDirection, SortKey},
     clicks::move_range_origin,
-    icons_pane::{configure_compact_view, density_icons_columns, wheel_scrolls_sideways},
+    icons_pane::density_icons_columns,
     scroll_settle::{ScrollSettle, install_scroll_refresh},
     selection::bitset_positions,
     type_groups::TypeGroupSorter,
