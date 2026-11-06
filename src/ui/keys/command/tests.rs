@@ -23,6 +23,14 @@ const EXTENDS_SELECTION: &str = "Shift with a motion key extends the selection a
 
 /// Catalog bindings that are not commands, and why.
 const NOT_COMMANDS: &[(&str, &str)] = &[
+    (
+        "TERMINAL_COPY",
+        "fixed VTE clipboard chord, isolated from file commands",
+    ),
+    (
+        "TERMINAL_PASTE",
+        "fixed VTE clipboard chord, isolated from file commands",
+    ),
     ("BACKSPACE", MANY_ROLES),
     ("SPACE", GENERIC),
     ("HOME_KEY", GENERIC),

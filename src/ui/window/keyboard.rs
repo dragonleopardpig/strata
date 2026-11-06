@@ -130,6 +130,9 @@ fn connect_key_presses(
         if !accepts_input(&key_root) || !dispatcher.reads_input() {
             return Propagation::Proceed;
         }
+        if super::composition::terminal_owns_focus(&dispatcher.window) {
+            return Propagation::Proceed;
+        }
         if tab_scoped && super::composition::is_tab_shortcut(press) {
             return Propagation::Proceed;
         }
