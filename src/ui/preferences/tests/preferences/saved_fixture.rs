@@ -132,6 +132,7 @@ fn assert_theme_colors_beside_user_css(themes: &ThemeManager, windows: &[gtk::Wi
 }
 
 fn assert_saved_browsing(manager: &PreferenceManager) {
+    assert!(manager.compact_full_names());
     assert!(!crate::ui::motion::animations_enabled());
     assert_eq!(
         (

@@ -99,6 +99,25 @@ pub(super) fn new_compact_card(slot: i32) -> gtk::Box {
     label.set_yalign(0.5);
     label.set_wrap_mode(gtk::pango::WrapMode::Char);
     label.set_text_overflow(gtk::InscriptionOverflow::EllipsizeEnd);
+    crate::ui::preferences::PreferenceManager::shared().bind_preference(
+        &label,
+        |manager| {
+            (
+                manager.compact_full_names(),
+                manager.text_size(),
+                manager.interface_font(),
+            )
+        },
+        |widget, (full_names, _, _)| {
+            if let Some(label) = widget.downcast_ref::<gtk::Inscription>() {
+                fit_compact_name_with_preference(
+                    label,
+                    label.text().as_deref().unwrap_or_default(),
+                    full_names,
+                );
+            }
+        },
+    );
 
     let details = gtk::Label::new(None);
     details.add_css_class("icons-card-details");
@@ -123,11 +142,32 @@ pub(super) fn set_compact_slot(card: &gtk::Box, slot: i32) {
     }
 }
 
-/// A Compact column is as wide as its longest name, up to a cap.
+/// A Compact column is as wide as its longest name, with an optional cap.
 pub(super) fn fit_compact_name(label: &gtk::Inscription, name: &str) {
-    let chars = i32::try_from(name.chars().count())
-        .unwrap_or(i32::MAX)
-        .clamp(COMPACT_MIN_NAME_CHARS as i32, COMPACT_MAX_NAME_CHARS as i32) as u32;
+    let full_names = crate::ui::preferences::PreferenceManager::shared().compact_full_names();
+    fit_compact_name_with_preference(label, name, full_names);
+}
+
+fn fit_compact_name_with_preference(label: &gtk::Inscription, name: &str, full_names: bool) {
+    let chars = i32::try_from(name.chars().count()).unwrap_or(i32::MAX);
+    let width = if full_names {
+        let text = label.create_pango_layout(Some(name));
+        text.set_attributes(label.attributes().as_ref());
+        text.pixel_size()
+            .0
+            .saturating_add(layout::label_insets(label).0)
+            .saturating_add(1)
+    } else {
+        -1
+    };
+    if label.width_request() != width {
+        label.set_width_request(width);
+    }
+    let chars = if full_names {
+        COMPACT_MIN_NAME_CHARS
+    } else {
+        chars.clamp(COMPACT_MIN_NAME_CHARS as i32, COMPACT_MAX_NAME_CHARS as i32) as u32
+    };
     if label.nat_chars() != chars {
         label.set_nat_chars(chars);
     }

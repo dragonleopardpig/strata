@@ -137,7 +137,6 @@ impl ResultWidgets {
                 let compact = matches!(kind, ResultKind::Compact { .. });
                 if compact {
                     icons_cell::set_compact_slot(&self.widget, size);
-                    icons_cell::fit_compact_name(name, &result.name);
                 } else {
                     icons_cell::set_slot(&self.widget, size);
                 }
@@ -150,6 +149,9 @@ impl ResultWidgets {
             }
         }
         highlights.apply(&self.rename_label(), &result.path);
+        if let (ResultKind::Compact { .. }, Labels::Icons { name, .. }) = (kind, &self.labels) {
+            icons_cell::fit_compact_name(name, &result.name);
+        }
         if result.is_directory {
             thumbnail::show_customized_icon(
                 &self.icon,
