@@ -736,10 +736,13 @@ then leaves the pasted file neither selected nor focused.
   parallel load, 3 of 60 `rename-and-undo-restores` runs without it lost the
   Ctrl+Z and none of 60 with it did (6 of 116 and 0 of 84 over every probe).
 - `new-folder-with-selection-groups` (Columns): waits for the renamed
-  `grouped` row to count its two items before clicking it. The row first
-  shows the optimistic rename, and a click on it before the listing catches
-  up leaves focus in the parent column (16 of 24 runs without the wait, none
-  of 36 with it).
+  `grouped` row to count its two items, then clicks a file in the open child
+  column to move focus there for the undo path. The row first shows the
+  optimistic rename, and re-clicking it before the listing catches up can
+  leave focus in the parent column (16 of 24 runs without the wait, none of
+  36 with it in the original probe). Two later runs still lost that re-click;
+  focusing the visible child column avoids depending on the renamed row's
+  pointer activation.
 - `tenxer-d-without-trash-confirms`: waits for the `no-trash` link to be
   listed before walking the cursor onto it.
 - `narrow-window-keeps-last-column`: settles the `folder` column before

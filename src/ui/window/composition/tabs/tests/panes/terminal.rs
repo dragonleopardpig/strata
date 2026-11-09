@@ -169,10 +169,6 @@ fn terminal_retries_a_missing_folder_and_accepts_native_path_bytes() {
             let retry =
                 button_with_label(pane.terminal.widget.upcast_ref(), "Retry").expect("retry");
             wait_until(|| retry.is_visible());
-            assert!(
-                retry.is_visible(),
-                "a missing starting folder must offer retry"
-            );
             assert!(!pane.terminal.is_running());
             std::fs::create_dir(&path).expect("restore folder");
             retry.emit_clicked();
