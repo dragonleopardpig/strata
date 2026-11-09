@@ -118,6 +118,10 @@ pub(super) fn new_compact_card(slot: i32) -> gtk::Box {
             }
         },
     );
+    // A new folder can bind rows before their mapped font is available.
+    label.connect_map(|label| {
+        fit_compact_name(label, label.text().as_deref().unwrap_or_default());
+    });
 
     let details = gtk::Label::new(None);
     details.add_css_class("icons-card-details");
