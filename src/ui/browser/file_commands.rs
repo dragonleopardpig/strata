@@ -199,8 +199,11 @@ impl BrowserView {
     }
 
     pub fn can_create_entry(&self) -> bool {
-        self.new_entry_parent()
-            .is_some_and(|(_, parent)| !is_trash_location(&parent) && !parent.is_recent_location())
+        self.new_entry_parent().is_some_and(|(_, parent)| {
+            !is_trash_location(&parent)
+                && !parent.is_recent_location()
+                && !parent.is_computer_root()
+        })
     }
 
     pub fn prepare_typed_entry(&self, text: &str) -> Result<TypedEntry, CreateRefusal> {
@@ -209,10 +212,11 @@ impl BrowserView {
             None => (text, false),
         };
         crate::services::validate_basename(name).map_err(CreateRefusal::Invalid)?;
-        let Some((_, parent)) = self
-            .new_entry_parent()
-            .filter(|(_, parent)| !is_trash_location(parent) && !parent.is_recent_location())
-        else {
+        let Some((_, parent)) = self.new_entry_parent().filter(|(_, parent)| {
+            !is_trash_location(parent)
+                && !parent.is_recent_location()
+                && !parent.is_computer_root()
+        }) else {
             return Err(CreateRefusal::Unsupported);
         };
         Ok(TypedEntry {
@@ -230,7 +234,7 @@ impl BrowserView {
 }
 
 pub(crate) fn can_rename(entry: &FileEntry) -> bool {
-    !is_trash_location(&entry.location)
+    !is_trash_location(&entry.location) && !entry.is_computer_item()
 }
 
 pub(crate) struct TypedRename {
@@ -685,6 +689,13 @@ impl BrowserView {
                 "Nothing to copy"
             });
         }
+        if entries.iter().any(FileEntry::is_computer_item) {
+            return Err(if moving {
+                "Can\u{2019}t move these items"
+            } else {
+                "Can\u{2019}t copy these items"
+            });
+        }
         if moving
             && !entries
                 .iter()
@@ -754,7 +765,7 @@ impl BrowserView {
         }
         if entries
             .iter()
-            .any(|entry| entry.location.native_path().is_none())
+            .any(|entry| entry.is_computer_item() || entry.location.native_path().is_none())
         {
             return TargetCommand::Refused;
         }

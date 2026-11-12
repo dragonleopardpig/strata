@@ -108,7 +108,10 @@ pub(super) fn transfer_destination(
         return Err("Open the other pane first");
     }
     let destination = other.ok_or("The other pane has no folder")?;
-    if is_trash_location(&destination) || destination.is_recent_location() {
+    if is_trash_location(&destination)
+        || destination.is_recent_location()
+        || destination.is_computer_root()
+    {
         return Err("Can\u{2019}t copy or move items into this folder");
     }
     Ok(destination)

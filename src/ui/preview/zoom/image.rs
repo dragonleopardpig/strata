@@ -73,6 +73,22 @@ impl ZoomImage {
     }
 }
 
+fn sync_viewport(scroll: &gtk::ScrolledWindow, image: &ZoomImage) -> bool {
+    let width = scroll.width();
+    let height = scroll.height();
+    let viewport = (
+        width
+            .min(super::super::media_layout::MAX_CONTENT_WIDTH)
+            .saturating_sub(24)
+            .max(1),
+        height.saturating_sub(24).max(1),
+    );
+    if image.imp().viewport.replace(viewport) != viewport {
+        image.queue_resize();
+    }
+    width > 0 && height > 0
+}
+
 pub(super) fn view(
     picture: &gtk::Picture,
     texture: &gtk::gdk::Texture,
@@ -96,23 +112,25 @@ pub(super) fn view(
         .hexpand(true)
         .vexpand(true)
         .build();
+    for adjustment in [scroll.hadjustment(), scroll.vadjustment()] {
+        let weak_scroll = scroll.downgrade();
+        let weak_image = image.downgrade();
+        adjustment.connect_page_size_notify(move |_| {
+            if let (Some(scroll), Some(image)) = (weak_scroll.upgrade(), weak_image.upgrade()) {
+                sync_viewport(&scroll, &image);
+            }
+        });
+    }
     let weak = image.downgrade();
     scroll.add_tick_callback(move |scroll, _| {
         let Some(image) = weak.upgrade() else {
             return glib::ControlFlow::Break;
         };
-        let viewport = (
-            scroll
-                .width()
-                .min(super::super::media_layout::MAX_CONTENT_WIDTH)
-                .saturating_sub(24)
-                .max(1),
-            scroll.height().saturating_sub(24).max(1),
-        );
-        if image.imp().viewport.replace(viewport) != viewport {
-            image.queue_resize();
+        if sync_viewport(scroll, &image) {
+            glib::ControlFlow::Break
+        } else {
+            glib::ControlFlow::Continue
         }
-        glib::ControlFlow::Continue
     });
     (scroll, image)
 }

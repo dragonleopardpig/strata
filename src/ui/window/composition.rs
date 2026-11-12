@@ -233,7 +233,7 @@ impl WindowContent {
         click.connect_pressed(move |gesture, _, x, y| {
             if let Some(window) = gesture.widget() {
                 click_browser.dismiss_filter_on_outside_click(&window, x, y);
-                click_browser.close_context_menu();
+                click_browser.dismiss_context_menu_on_outside_click(&window, x, y);
             }
         });
         self.overlay.add_controller(click);

@@ -39,7 +39,9 @@ pub(super) fn bind_row_label(
         let row = widget.downcast_ref::<gtk::Button>().expect("device row");
         let label_widget = find_row_label(row).expect("device row label");
         label_widget.set_text(display_name);
-        crate::ui::accessibility::set_own_label(row, display_name);
+        if row.is_sensitive() {
+            crate::ui::accessibility::set_own_label(row, display_name);
+        }
     });
 }
 

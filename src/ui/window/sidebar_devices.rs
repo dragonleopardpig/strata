@@ -52,6 +52,12 @@ impl SidebarState {
         let has_root = mounts.iter().any(|(_, loc, _)| {
             loc.native_path()
                 .is_some_and(|p| p == std::path::Path::new("/"))
+        }) || volumes.iter().any(|volume| {
+            volume
+                .get_mount()
+                .and_then(|mount| location_for_file(&mount.root()))
+                .and_then(|loc| loc.native_path().map(|p| p == std::path::Path::new("/")))
+                .unwrap_or(false)
         });
         if !has_root {
             self.append_root_device();

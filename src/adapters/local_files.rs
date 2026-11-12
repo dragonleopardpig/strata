@@ -222,7 +222,7 @@ fn listed_entry(
 fn entry_from_info(location: Location, info: gio::FileInfo) -> FileEntry {
     let is_computer = location
         .uri_value()
-        .is_some_and(|uri| uri.starts_with("computer:"));
+        .is_some_and(|uri| crate::model::uri_scheme_eq(uri, "computer"));
     let recent_uri = is_computer.then(|| location.uri_value().unwrap_or("computer:///").to_owned());
     let location = if matches!(
         info.file_type(),

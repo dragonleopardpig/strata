@@ -172,6 +172,8 @@ pub(super) fn set_icons_entry_details(card: &gtk::Box, entry: &FileEntry) {
         label.set_visible(info.is_some());
     } else if card.has_css_class("compact-card") {
         label.set_visible(false);
+    } else {
+        label.set_visible(true);
     }
     set_label_if_changed(&label, &info.unwrap_or_default());
 }

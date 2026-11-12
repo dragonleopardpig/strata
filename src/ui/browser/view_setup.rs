@@ -576,24 +576,8 @@ impl ViewState {
                 return;
             };
             state.cancel_click_rename();
-            if let Some(popover) = state
-                .active_context_popover
-                .borrow()
-                .as_ref()
-                .and_then(|p| p.upgrade())
-                .filter(|p| p.is_visible())
-            {
-                let on_popover = gesture
-                    .widget()
-                    .and_then(|widget| widget.pick(x, y, gtk::PickFlags::DEFAULT))
-                    .is_some_and(|target| {
-                        target == *popover.upcast_ref::<gtk::Widget>()
-                            || target.is_ancestor(&popover)
-                            || target.ancestor(gtk::Popover::static_type()).is_some()
-                    });
-                if !on_popover {
-                    popover.popdown();
-                }
+            if let Some(widget) = gesture.widget() {
+                state.dismiss_context_menu_on_outside_click(&widget, x, y);
             }
         });
         self.overlay.add_controller(click);

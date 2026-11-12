@@ -270,11 +270,13 @@ impl ViewState {
             .set_visible_child_name(if show_actions { "actions" } else { "hidden" });
     }
 
-    /// Trash and Recent take no drops, so they never look like a destination.
+    /// Trash, Recent, and Computer take no drops, so they never look like a destination.
     fn accepts_drops_at(&self, depth: usize) -> bool {
-        self.browser
-            .location_at(depth)
-            .is_some_and(|location| !is_trash_location(&location) && !location.is_recent_location())
+        self.browser.location_at(depth).is_some_and(|location| {
+            !is_trash_location(&location)
+                && !location.is_recent_location()
+                && !location.is_computer_root()
+        })
     }
 
     pub(super) fn focused_column_depth(&self) -> Option<usize> {
@@ -334,5 +336,32 @@ impl ViewState {
             return true;
         }
         false
+    }
+
+    pub(in crate::ui) fn dismiss_context_menu_on_outside_click(
+        &self,
+        root: &gtk::Widget,
+        x: f64,
+        y: f64,
+    ) {
+        let Some(popover) = self
+            .active_context_popover
+            .borrow()
+            .as_ref()
+            .and_then(|p| p.upgrade())
+            .filter(|p| p.is_visible())
+        else {
+            return;
+        };
+        let on_popover = root
+            .pick(x, y, gtk::PickFlags::DEFAULT)
+            .is_some_and(|target| {
+                target == *popover.upcast_ref::<gtk::Widget>()
+                    || target.is_ancestor(&popover)
+                    || target.ancestor(gtk::Popover::static_type()).is_some()
+            });
+        if !on_popover {
+            popover.popdown();
+        }
     }
 }

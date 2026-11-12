@@ -191,7 +191,7 @@ pub(crate) fn administrator_access_available() -> bool {
     })
 }
 
-fn uri_scheme_eq(uri: &str, scheme: &str) -> bool {
+pub(crate) fn uri_scheme_eq(uri: &str, scheme: &str) -> bool {
     gio::glib::Uri::parse_scheme(uri).is_some_and(|parsed| parsed.eq_ignore_ascii_case(scheme))
 }
 
@@ -699,7 +699,7 @@ impl FileEntry {
     pub fn is_computer_item(&self) -> bool {
         self.recent_uri
             .as_ref()
-            .is_some_and(|uri| uri.starts_with("computer:///"))
+            .is_some_and(|uri| uri_scheme_eq(uri, "computer"))
     }
 
     pub fn local_thumbnail_path(&self) -> Option<&Path> {

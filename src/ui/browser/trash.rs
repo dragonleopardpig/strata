@@ -225,10 +225,9 @@ impl ViewState {
     }
 
     pub(super) fn request_delete(self: &Rc<Self>, entries: Vec<FileEntry>, permanent: bool) {
-        if entries
-            .iter()
-            .any(|entry| !super::paths::can_remove_location(&entry.location))
-        {
+        if entries.iter().any(|entry| {
+            entry.is_computer_item() || !super::paths::can_remove_location(&entry.location)
+        }) {
             return;
         }
         if permanent {
@@ -245,10 +244,9 @@ impl ViewState {
         entries: Vec<FileEntry>,
         permanent: bool,
     ) {
-        if entries
-            .iter()
-            .any(|entry| !super::paths::can_remove_location(&entry.location))
-        {
+        if entries.iter().any(|entry| {
+            entry.is_computer_item() || !super::paths::can_remove_location(&entry.location)
+        }) {
             return;
         }
         let kind = if permanent {

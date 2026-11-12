@@ -707,7 +707,7 @@ pub(crate) fn is_local_block_in_table(table: &MountTable, path: &Path) -> bool {
         .is_some_and(|source| source.starts_with("/dev"))
 }
 
-static USAGE_CACHE: LazyLock<Mutex<HashMap<PathBuf, (u64, u64, Instant)>>> =
+static USAGE_CACHE: LazyLock<Mutex<HashMap<PathBuf, (Option<(u64, u64)>, Instant)>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
 static PENDING_PROBES: LazyLock<Mutex<HashSet<PathBuf>>> =
@@ -739,11 +739,11 @@ pub(crate) fn filesystem_usage(path: &Path) -> Option<(u64, u64)> {
 
     let now = Instant::now();
     let cached = if let Ok(cache) = USAGE_CACHE.lock() {
-        if let Some(&(total, available, timestamp)) = cache.get(path) {
+        if let Some(&(cached_usage, timestamp)) = cache.get(path) {
             if now.duration_since(timestamp) < Duration::from_secs(60) {
-                return Some((total, available));
+                return cached_usage;
             }
-            Some((total, available))
+            cached_usage
         } else {
             None
         }
@@ -764,15 +764,16 @@ pub(crate) fn filesystem_usage(path: &Path) -> Option<(u64, u64)> {
             if let Ok(mut pending) = PENDING_PROBES.lock() {
                 pending.remove(&path_buf);
             }
-            if let Some(usage) = usage {
-                if let Ok(mut cache) = USAGE_CACHE.lock() {
-                    cache.insert(path_buf, (usage.0, usage.1, Instant::now()));
-                }
+            let changed = if let Ok(mut cache) = USAGE_CACHE.lock() {
+                let previous = cache.insert(path_buf, (usage, Instant::now()));
+                previous.map(|(prev_usage, _)| prev_usage) != Some(usage)
+            } else {
+                false
+            };
+            if changed && usage.is_some() {
                 glib::idle_add_once(|| {
                     crate::ui::refresh_sidebars();
                 });
-            } else if let Ok(mut cache) = USAGE_CACHE.lock() {
-                cache.remove(&path_buf);
             }
         });
     }

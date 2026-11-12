@@ -101,8 +101,16 @@ impl PaneTerminal {
 
     pub(in crate::ui::window::composition) fn has_jobs(&self) -> bool {
         self.pid.get().is_some_and(|pid| {
-            std::fs::read_to_string(format!("/proc/{0}/task/{0}/children", pid.0))
-                .is_ok_and(|children| !children.trim().is_empty())
+            let tasks_dir = format!("/proc/{}/task", pid.0);
+            if let Ok(entries) = std::fs::read_dir(&tasks_dir) {
+                entries.flatten().any(|entry| {
+                    std::fs::read_to_string(entry.path().join("children"))
+                        .is_ok_and(|children| !children.trim().is_empty())
+                })
+            } else {
+                std::fs::read_to_string(format!("/proc/{0}/task/{0}/children", pid.0))
+                    .is_ok_and(|children| !children.trim().is_empty())
+            }
         })
     }
 
@@ -142,6 +150,8 @@ fn shell() -> String {
 
 pub(super) fn terminate(pid: glib::Pid) {
     if let Some(pid) = rustix::process::Pid::from_raw(pid.0) {
-        let _ = rustix::process::kill_process_group(pid, rustix::process::Signal::HUP);
+        if rustix::process::kill_process_group(pid, rustix::process::Signal::HUP).is_err() {
+            let _ = rustix::process::kill_process(pid, rustix::process::Signal::HUP);
+        }
     }
 }

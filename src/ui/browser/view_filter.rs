@@ -147,7 +147,12 @@ impl BrowserView {
         filter_button.set_active(false);
     }
 
-    pub(in crate::ui) fn close_context_menu(&self) -> bool {
-        self.state.close_context_menu()
+    pub(in crate::ui) fn dismiss_context_menu_on_outside_click(
+        &self,
+        root: &gtk::Widget,
+        x: f64,
+        y: f64,
+    ) {
+        self.state.dismiss_context_menu_on_outside_click(root, x, y);
     }
 }

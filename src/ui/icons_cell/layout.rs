@@ -296,11 +296,29 @@ mod imp {
             let Some(label) = caption_label(widget) else {
                 return;
             };
+            let progress_widget = caption_progress(widget).filter(|progress| progress.is_visible());
+            let details_widget = caption_details(widget).filter(|details| details.is_visible());
+            let progress_width = (width - 16).max(32);
+            let reserved_progress = progress_widget.as_ref().map_or(0, |progress| {
+                progress
+                    .measure(gtk::Orientation::Vertical, progress_width)
+                    .1
+            });
+            let reserved_details = details_widget
+                .as_ref()
+                .map_or(0, |details| details.measure(gtk::Orientation::Vertical, width).1);
+            let max_caption_height = if reserved_progress > 0 {
+                (height - reserved_progress - reserved_details)
+                    .max(ICONS_CARD_LABEL_LINE_PX)
+                    .min(height)
+            } else {
+                height
+            };
             let mut current_y = 0;
             if label.is_visible() {
                 let (caption_width, caption_height) = self.extent(&label, width);
                 let caption_width = caption_width.min(width);
-                let caption_height = caption_height.min(height);
+                let caption_height = caption_height.min(max_caption_height);
                 label.allocate(
                     caption_width,
                     caption_height,
@@ -320,12 +338,8 @@ mod imp {
                 field.allocate(width, field_height, -1, None);
                 current_y = current_y.max(field_height);
             }
-            if let Some(progress) = caption_progress(widget).filter(|progress| progress.is_visible()) {
-                let progress_width = (width - 16).max(32);
-                let progress_height = progress
-                    .measure(gtk::Orientation::Vertical, progress_width)
-                    .1
-                    .min((height - current_y).max(0));
+            if let Some(progress) = progress_widget {
+                let progress_height = reserved_progress.min((height - current_y).max(0));
                 progress.allocate(
                     progress_width,
                     progress_height,
@@ -337,12 +351,9 @@ mod imp {
                 );
                 current_y += progress_height;
             }
-            if let Some(details) = caption_details(widget).filter(|details| details.is_visible()) {
+            if let Some(details) = details_widget {
                 let details_width = width;
-                let details_height = details
-                    .measure(gtk::Orientation::Vertical, details_width)
-                    .1
-                    .min((height - current_y).max(0));
+                let details_height = reserved_details.min((height - current_y).max(0));
                 details.allocate(
                     details_width,
                     details_height,

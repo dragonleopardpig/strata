@@ -147,10 +147,9 @@ impl ModeViews {
         source_position: usize,
     ) -> Option<(gtk::Widget, u32, Option<gtk::Widget>)> {
         let pane = self
-            .icons_panes
-            .iter()
-            .chain(self.compact_pane.iter())
-            .find(|pane| pane.depth == depth)?;
+            .visible_panes()
+            .into_iter()
+            .find(|pane| self.mode.is_grid() && pane.depth == depth)?;
         pane.item_sections().iter().find_map(|section| {
             let (position, row) = rename_row_in(pane, section, source_position)?;
             Some((section.view.clone(), position, row))

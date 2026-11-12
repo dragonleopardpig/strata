@@ -80,6 +80,9 @@ impl SidebarState {
                 self.make_place_reorderable(&row, place);
             }
             "computer" => {
+                if self.local_only {
+                    return;
+                }
                 let location = Location::uri("computer:///");
                 let row = self.append_place(
                     crate::assets::icons::MONITOR,
