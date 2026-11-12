@@ -100,6 +100,9 @@ pub(in crate::ui) fn entry_icon(entry: &FileEntry) -> &'static str {
     if entry.is_locked_folder() {
         return crate::assets::icons::FOLDER_LOCK;
     }
+    if entry.is_computer_item() {
+        return crate::assets::icons::HARD_DRIVE;
+    }
     if entry.is_directory() {
         return crate::assets::icons::FOLDER;
     }

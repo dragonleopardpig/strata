@@ -21,7 +21,7 @@ use crate::{
 };
 
 use super::{
-    DeviceIds, RELEASE_ROW_TOOLTIP, ReleaseKey, ReleaseKind, ReleasePhase, begin_pending,
+    DeviceIds, ReleaseKey, ReleaseKind, ReleasePhase, begin_pending,
     clear_release_dismissed, complete_release_success, enter_releasing, is_pending,
     location_at_flush_for_test, note_unmount_progress, pending_device_shell,
     present_release_overlay, release_body_text, release_error_count, release_is_dismissed,

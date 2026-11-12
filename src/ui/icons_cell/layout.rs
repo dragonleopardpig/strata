@@ -24,6 +24,17 @@ fn caption_details(widget: &gtk::Widget) -> Option<gtk::Label> {
     None
 }
 
+fn caption_progress(widget: &gtk::Widget) -> Option<gtk::ProgressBar> {
+    let mut sibling = widget.first_child();
+    while let Some(child) = sibling {
+        if let Ok(progress) = child.clone().downcast::<gtk::ProgressBar>() {
+            return Some(progress);
+        }
+        sibling = child.next_sibling();
+    }
+    None
+}
+
 fn caption_editor(widget: &gtk::Widget) -> Option<gtk::Widget> {
     let mut sibling = widget.first_child();
     while let Some(child) = sibling {
@@ -269,13 +280,15 @@ mod imp {
             } else {
                 for_size
             };
-            // The single-line label reserves its font height even before details arrive.
+            let progress_height = caption_progress(widget)
+                .filter(|progress| progress.is_visible())
+                .map_or(0, |progress| progress.measure(orientation, width).1);
             let details_height =
                 caption_details(widget).map_or(0, |details| details.measure(orientation, width).1);
             let content_height = self
                 .reserved_height(&label, width)
                 .max(caption_editor(widget).map_or(0, |field| field.measure(orientation, width).1));
-            let height = content_height + details_height;
+            let height = content_height + progress_height + details_height;
             (height, height, -1, -1)
         }
 
@@ -306,6 +319,23 @@ mod imp {
                     .min(height);
                 field.allocate(width, field_height, -1, None);
                 current_y = current_y.max(field_height);
+            }
+            if let Some(progress) = caption_progress(widget).filter(|progress| progress.is_visible()) {
+                let progress_width = (width - 16).max(32);
+                let progress_height = progress
+                    .measure(gtk::Orientation::Vertical, progress_width)
+                    .1
+                    .min((height - current_y).max(0));
+                progress.allocate(
+                    progress_width,
+                    progress_height,
+                    -1,
+                    Some(gsk::Transform::new().translate(&graphene::Point::new(
+                        ((width - progress_width) / 2) as f32,
+                        current_y as f32,
+                    ))),
+                );
+                current_y += progress_height;
             }
             if let Some(details) = caption_details(widget).filter(|details| details.is_visible()) {
                 let details_width = width;

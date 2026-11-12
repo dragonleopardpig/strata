@@ -48,6 +48,17 @@ pub(in crate::ui) fn icon_details_need_fill(entry: &FileEntry) -> bool {
 }
 
 pub(in crate::ui) fn entry_size(entry: &FileEntry) -> String {
+    if entry.is_computer_item() {
+        if let (MetadataValue::Known(total), MetadataValue::Known(free)) =
+            (&entry.size, &entry.child_count)
+        {
+            return format!(
+                "{} free / {}",
+                crate::i18n::file_size(*free),
+                crate::i18n::file_size(*total)
+            );
+        }
+    }
     if entry.is_directory() {
         return folder_item_info(entry).unwrap_or_default();
     }
@@ -58,6 +69,9 @@ pub(in crate::ui) fn entry_size(entry: &FileEntry) -> String {
 }
 
 pub(super) fn entry_type(entry: &FileEntry) -> String {
+    if entry.is_computer_item() {
+        return crate::i18n::tr("Storage Device");
+    }
     match crate::services::entry_type(entry) {
         crate::services::EntryType::Known(description) => description,
         kind => crate::i18n::tr(kind.description()),
@@ -91,6 +105,17 @@ fn folder_item_info(entry: &FileEntry) -> Option<String> {
 }
 
 fn entry_icons_item_info(entry: &FileEntry) -> Option<String> {
+    if entry.is_computer_item() {
+        if let (MetadataValue::Known(total), MetadataValue::Known(free)) =
+            (&entry.size, &entry.child_count)
+        {
+            return Some(format!(
+                "{} free of {}",
+                crate::i18n::file_size(*free),
+                crate::i18n::file_size(*total)
+            ));
+        }
+    }
     if entry.is_directory() {
         return folder_item_info(entry);
     }
@@ -107,6 +132,30 @@ fn entry_icons_item_info(entry: &FileEntry) -> Option<String> {
 }
 
 pub(super) fn set_icons_entry_details(card: &gtk::Box, entry: &FileEntry) {
+    if let Some(progress) = icons_cell::progress_bar(card) {
+        if entry.is_computer_item()
+            && let (MetadataValue::Known(total), MetadataValue::Known(free)) =
+                (&entry.size, &entry.child_count)
+            && *total > 0
+        {
+            let used = total.saturating_sub(*free);
+            let fraction = (used as f64 / *total as f64).clamp(0.0, 1.0);
+            progress.set_visible(true);
+            progress.set_fraction(fraction);
+            if fraction >= 0.90 {
+                progress.add_css_class("danger");
+                progress.remove_css_class("warning");
+            } else if fraction >= 0.80 {
+                progress.add_css_class("warning");
+                progress.remove_css_class("danger");
+            } else {
+                progress.remove_css_class("danger");
+                progress.remove_css_class("warning");
+            }
+        } else {
+            progress.set_visible(false);
+        }
+    }
     let Some(label) = icons_cell::details_label(card) else {
         return;
     };
