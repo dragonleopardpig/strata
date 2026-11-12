@@ -270,15 +270,23 @@ impl IconsCardFactory {
         let source_position = item
             .item()
             .and_then(|value| self.positions.index.of_item(&value));
-        let binding = CardBinding {
-            browser: self.browser.upgrade(),
-            state: self.state.as_ref().and_then(Weak::upgrade),
-            source_position,
-            thumbnail_size: self.icon_slot(),
-        };
-        let entry = binding.browser.as_ref().and_then(|browser| {
+        let browser = self.browser.upgrade();
+        let entry = browser.as_ref().and_then(|browser| {
             source_position.and_then(|position| browser.entry_at(self.depth, position))
         });
+        let thumbnail_size = if self.layout == IconsLayout::Compact
+            && entry.as_ref().is_some_and(FileEntry::is_computer_item)
+        {
+            40
+        } else {
+            self.icon_slot()
+        };
+        let binding = CardBinding {
+            browser,
+            state: self.state.as_ref().and_then(Weak::upgrade),
+            source_position,
+            thumbnail_size,
+        };
         match self.layout {
             IconsLayout::Grid => icons_cell::set_slot(&card, binding.thumbnail_size),
             IconsLayout::Compact => icons_cell::set_compact_slot(&card, binding.thumbnail_size),
