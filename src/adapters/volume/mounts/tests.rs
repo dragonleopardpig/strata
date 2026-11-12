@@ -619,3 +619,22 @@ fn filesystem_usage_runs_synchronously_for_local_and_asynchronously_for_non_loca
     let probe_init = super::filesystem_usage(remote_path);
     assert!(probe_init.is_none());
 }
+
+#[test]
+fn sanitize_statvfs_rejects_rclone_synthetic_placeholders() {
+    // Normal 5 TB Google Drive quota
+    assert_eq!(
+        super::sanitize_statvfs_bytes(1_342_177_280, 1_340_300_143, 4096),
+        Some((5_497_558_138_880, 5_489_869_385_728))
+    );
+    // rclone `-1` blocks placeholder (~18,446,744.1 TB)
+    assert_eq!(
+        super::sanitize_statvfs_bytes(4_503_599_627_370_495, 4_503_599_627_370_495, 4096),
+        None
+    );
+    // rclone `1 PiB` (`1 << 50`) unknown-quota placeholder
+    assert_eq!(
+        super::sanitize_statvfs_bytes(274_877_906_944, 274_877_906_944, 4096),
+        None
+    );
+}

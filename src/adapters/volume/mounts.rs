@@ -717,20 +717,36 @@ static USAGE_CACHE: LazyLock<Mutex<HashMap<PathBuf, UsageCacheEntry>>> =
 static PENDING_PROBES: LazyLock<Mutex<HashSet<PathBuf>>> =
     LazyLock::new(|| Mutex::new(HashSet::new()));
 
-fn raw_statvfs(path: &Path) -> Option<(u64, u64)> {
-    let stat = rustix::fs::statvfs(path).ok()?;
-    if stat.f_blocks == 0 {
+/// FUSE / `rclone` mounts report synthetic placeholder capacities (`1 PiB` = `1 << 50`
+/// when `About` is unsupported, or `(u64::MAX / block) * block` ≈ `18.4 EB` when
+/// `Statfs` is uninitialized or fails). Treat capacities at or above `1 PiB` as
+/// unbounded/unknown so fake numbers never appear in capacity bars.
+const SYNTHETIC_CAPACITY_THRESHOLD: u64 = 1u64 << 50;
+
+pub(crate) fn sanitize_statvfs_bytes(
+    blocks: u64,
+    bavail: u64,
+    block_size: u64,
+) -> Option<(u64, u64)> {
+    if blocks == 0 || block_size == 0 {
         return None;
     }
+    let total = blocks.checked_mul(block_size)?;
+    if total >= SYNTHETIC_CAPACITY_THRESHOLD {
+        return None;
+    }
+    let avail = bavail.checked_mul(block_size)?.min(total);
+    Some((total, avail))
+}
+
+fn raw_statvfs(path: &Path) -> Option<(u64, u64)> {
+    let stat = rustix::fs::statvfs(path).ok()?;
     let block = if stat.f_frsize > 0 {
         stat.f_frsize
     } else {
         stat.f_bsize.max(1)
     };
-    Some((
-        stat.f_blocks.saturating_mul(block),
-        stat.f_bavail.saturating_mul(block),
-    ))
+    sanitize_statvfs_bytes(stat.f_blocks, stat.f_bavail, block)
 }
 
 /// Total and available bytes for a mounted path. Local block filesystems are
@@ -744,7 +760,12 @@ pub(crate) fn filesystem_usage(path: &Path) -> Option<(u64, u64)> {
     let now = Instant::now();
     let cached = if let Ok(cache) = USAGE_CACHE.lock() {
         if let Some(&(cached_usage, timestamp)) = cache.get(path) {
-            if now.duration_since(timestamp) < Duration::from_secs(60) {
+            let ttl = if cached_usage.is_some() {
+                Duration::from_secs(60)
+            } else {
+                Duration::from_secs(5)
+            };
+            if now.duration_since(timestamp) < ttl {
                 return cached_usage;
             }
             cached_usage
