@@ -167,6 +167,7 @@ impl PaneTerminal {
 
     pub(super) fn split(&self, listing: &gtk::Widget) -> gtk::Paned {
         let split = gtk::Paned::new(gtk::Orientation::Vertical);
+        split.set_wide_handle(true);
         split.set_start_child(Some(listing));
         split.set_end_child(Some(&self.widget));
         split.set_resize_start_child(true);
@@ -174,6 +175,7 @@ impl PaneTerminal {
         split.set_shrink_start_child(false);
         split.set_shrink_end_child(false);
         split.set_vexpand(true);
+        crate::ui::window::sidebar_rail::configure_paned_handle(&split, "row-resize");
         let initialized = Cell::new(false);
         let weak = split.downgrade();
         self.widget.connect_map(move |_| {

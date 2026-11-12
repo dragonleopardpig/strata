@@ -197,7 +197,7 @@ impl Panes {
     ) -> Rc<Self> {
         let paned = gtk::Paned::new(gtk::Orientation::Horizontal);
         paned.add_css_class("dual-pane");
-        paned.set_wide_handle(false);
+        paned.set_wide_handle(true);
         paned.set_resize_start_child(true);
         paned.set_resize_end_child(true);
         paned.set_shrink_start_child(false);
@@ -205,6 +205,7 @@ impl Panes {
         paned.set_hexpand(true);
         paned.set_vexpand(true);
         paned.set_start_child(Some(&main.shell));
+        super::super::sidebar_rail::configure_paned_handle(&paned, "col-resize");
         let panes = Rc::new(Self {
             layout: Cell::new(PaneLayout::default()),
             main: Rc::new(main),

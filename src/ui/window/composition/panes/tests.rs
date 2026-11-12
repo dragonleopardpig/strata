@@ -75,3 +75,23 @@ fn transfers_go_to_the_other_panes_folder_when_it_takes_files() {
         assert_eq!(transfer_destination(split, other), Err(refusal));
     }
 }
+
+#[test]
+fn paned_separator_is_configured_with_resize_cursor_and_wide_handle() {
+    if gtk::init().is_err() {
+        return;
+    }
+    let paned = gtk::Paned::new(gtk::Orientation::Horizontal);
+    paned.add_css_class("dual-pane");
+    paned.set_wide_handle(true);
+    crate::ui::window::sidebar_rail::configure_paned_handle(&paned, "col-resize");
+
+    let separator =
+        crate::ui::window::sidebar_rail::paned_separator(&paned).expect("separator widget");
+    assert!(paned.is_wide_handle());
+    assert_eq!(
+        separator.cursor().and_then(|c| c.name()).as_deref(),
+        Some("col-resize")
+    );
+}
+

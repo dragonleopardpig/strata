@@ -315,6 +315,7 @@ fn browser_split(
     bind_sidebar_toggle(&content, sidebar, toggle, preview);
     bind_sidebar_modes(sidebar, toggle, preferences);
     super::super::bind_sidebar_text_size(&content, sidebar);
+    super::super::sidebar_rail::configure_paned_handle(&content, "col-resize");
     content
 }
 
