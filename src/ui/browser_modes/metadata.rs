@@ -54,16 +54,15 @@ pub(in crate::ui) fn icon_details_need_fill(entry: &FileEntry) -> bool {
 }
 
 pub(in crate::ui) fn entry_size(entry: &FileEntry) -> String {
-    if entry.is_computer_item() {
-        if let (MetadataValue::Known(total), MetadataValue::Known(free)) =
+    if entry.is_computer_item()
+        && let (MetadataValue::Known(total), MetadataValue::Known(free)) =
             (&entry.size, &entry.child_count)
-        {
-            return format!(
-                "{} free / {}",
-                crate::i18n::file_size(*free),
-                crate::i18n::file_size(*total)
-            );
-        }
+    {
+        return format!(
+            "{} free / {}",
+            crate::i18n::file_size(*free),
+            crate::i18n::file_size(*total)
+        );
     }
     if entry.is_directory() {
         return folder_item_info(entry).unwrap_or_default();
@@ -111,16 +110,15 @@ fn folder_item_info(entry: &FileEntry) -> Option<String> {
 }
 
 fn entry_icons_item_info(entry: &FileEntry) -> Option<String> {
-    if entry.is_computer_item() {
-        if let (MetadataValue::Known(total), MetadataValue::Known(free)) =
+    if entry.is_computer_item()
+        && let (MetadataValue::Known(total), MetadataValue::Known(free)) =
             (&entry.size, &entry.child_count)
-        {
-            return Some(format!(
-                "{} free of {}",
-                crate::i18n::file_size(*free),
-                crate::i18n::file_size(*total)
-            ));
-        }
+    {
+        return Some(format!(
+            "{} free of {}",
+            crate::i18n::file_size(*free),
+            crate::i18n::file_size(*total)
+        ));
     }
     if entry.is_directory() {
         return folder_item_info(entry);

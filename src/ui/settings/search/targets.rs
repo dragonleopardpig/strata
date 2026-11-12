@@ -75,6 +75,12 @@ pub(super) const TARGETS: &[Target] = &[
         aliases: "browsing video audio gif playback paused sound",
     },
     Target {
+        id: "preview-video-start",
+        page: "general",
+        title: "Video preview start",
+        aliases: "browsing video playback position seek skip intro offset percent",
+    },
+    Target {
         id: "render-documents",
         page: "general",
         title: "Render documents by default",
@@ -229,6 +235,12 @@ pub(super) const TARGETS: &[Target] = &[
         page: "general",
         title: "Unlock encrypted volumes",
         aliases: "encrypted luks password udiskie automount usb volume desktop integration omarchy",
+    },
+    Target {
+        id: "system-light-dark-mode",
+        page: "theme",
+        title: "Follow system light/dark mode",
+        aliases: "light dark mode day night appearance color scheme",
     },
     Target {
         id: "omarchy",

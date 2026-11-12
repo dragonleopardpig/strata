@@ -50,11 +50,17 @@ fn parses_mount_points_and_filesystem_types() {
 fn local_block_mounts_identified_correctly() {
     let table = MountTable::parse(SAMPLE);
     assert!(is_local_block_in_table(&table, Path::new("/")));
-    assert!(is_local_block_in_table(&table, Path::new("/home/user/file")));
+    assert!(is_local_block_in_table(
+        &table,
+        Path::new("/home/user/file")
+    ));
     assert!(is_local_block_in_table(&table, Path::new("/mnt/nfs/local")));
     assert!(!is_local_block_in_table(&table, Path::new("/mnt/nfs")));
     assert!(!is_local_block_in_table(&table, Path::new("/mnt/nfs/docs")));
-    assert!(!is_local_block_in_table(&table, Path::new("/run/user/1000/gvfs")));
+    assert!(!is_local_block_in_table(
+        &table,
+        Path::new("/run/user/1000/gvfs")
+    ));
     assert!(!is_local_block_in_table(&table, Path::new("/mnt/my share")));
 }
 
@@ -287,21 +293,22 @@ fn prefix_matching_is_component_wise() {
 }
 
 #[test]
-fn fuse_drivers_for_local_drives_are_not_network_shares() {
+fn fuse_drivers_for_local_storage_are_not_remote_shares() {
     let table = MountTable::parse(format!(
-        "{SAMPLE}70 22 8:33 / /run/media/user/USB rw,relatime shared:40 - fuseblk /dev/sdc1 rw\n"
+        "{SAMPLE}70 22 8:33 / /run/media/user/USB rw,relatime shared:40 - fuseblk /dev/sdc1 rw\n\
+         71 22 0:60 / /data/pool rw,relatime shared:41 - fuse.mergerfs disks rw\n"
     ));
-    let usb = Path::new("/run/media/user/USB/photos");
-    assert!(remote(&table, usb), "a FUSE daemon can still block");
-    assert!(!table.is_network_path(usb));
-    for share in [
-        "/mnt/nfs/docs",
-        "/run/user/1000/gvfs/share",
-        "/mnt/my share/docs",
+    for (path, remote_share) in [
+        ("/run/media/user/USB/photos", false),
+        ("/data/pool/media", false),
+        ("/mnt/nfs/docs", true),
+        ("/run/user/1000/gvfs/share", true),
+        ("/mnt/my share/docs", true),
+        ("/mnt/nfs/local/docs", false),
     ] {
-        assert!(table.is_network_path(Path::new(share)), "{share}");
+        let path = Path::new(path);
+        assert_eq!(table.is_remote_share(path), remote_share, "{path:?}");
     }
-    assert!(!table.is_network_path(Path::new("/mnt/nfs/local/docs")));
 }
 
 #[test]
@@ -604,7 +611,7 @@ fn name_rules_follow_the_driver_its_options_and_its_name_length() {
 fn filesystem_usage_runs_synchronously_for_local_and_asynchronously_for_non_local() {
     let root_usage = super::filesystem_usage(Path::new("/"));
     assert!(root_usage.is_some());
-    let (total, avail) = root_usage.unwrap();
+    let (total, avail) = root_usage.expect("root usage");
     assert!(total > 0);
     assert!(avail <= total);
 
@@ -612,4 +619,3 @@ fn filesystem_usage_runs_synchronously_for_local_and_asynchronously_for_non_loca
     let probe_init = super::filesystem_usage(remote_path);
     assert!(probe_init.is_none());
 }
-

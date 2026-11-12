@@ -75,11 +75,13 @@ use persistence::{
     SettingKey, parse_preferences, read_loaded_preferences, read_state_file, record_changes,
     settings_path,
 };
-pub(in crate::ui) use stored::{SEARCH_ENTRY_LIMIT_CHOICES, SEARCH_TIME_LIMIT_CHOICES};
+pub(in crate::ui) use stored::{
+    MAX_PREVIEW_VIDEO_START, SEARCH_ENTRY_LIMIT_CHOICES, SEARCH_TIME_LIMIT_CHOICES,
+};
 use stored::{
     browser_mode_from_stored, configured_hardware_acceleration, configured_video_preview_backend,
-    normalized_search_limit, normalized_volume, sort_preferences, store_density, store_sort,
-    stored_browser_mode, stored_density,
+    normalized_search_limit, normalized_video_start, normalized_volume, sort_preferences,
+    store_density, store_sort, stored_browser_mode, stored_density,
 };
 pub use text_size::TextSize;
 
@@ -265,6 +267,8 @@ pub(in crate::ui) struct Preferences {
     unit_system: UnitSystem,
     #[serde(default)]
     preview_autoplay: bool,
+    #[serde(default)]
+    preview_video_start: u32,
     #[serde(default = "default_enabled")]
     watch_network_folders: bool,
     #[serde(default = "crate::sandbox::browser::default_worker_limit")]
@@ -411,13 +415,20 @@ impl PreferenceManager {
     pub(in crate::ui) fn normalize_loaded_theme_selection(
         &self,
         theme_is_known: impl Fn(&str) -> bool,
+        system_available: bool,
         omarchy_available: bool,
     ) {
         let mut preferences = self.preferences.borrow_mut();
         if !theme_is_known(&preferences.theme) {
             preferences.theme = "azure-glow".to_owned();
         }
-        if preferences.mode == "omarchy" && !omarchy_available {
+        let mode_available = match preferences.mode.as_str() {
+            "theme" => true,
+            "system" => system_available,
+            "omarchy" => omarchy_available,
+            _ => false,
+        };
+        if !mode_available {
             preferences.mode = "theme".to_owned();
         } else if !settings_path().is_file() && omarchy_available {
             preferences.mode = "omarchy".to_owned();

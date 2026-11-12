@@ -275,12 +275,17 @@ impl Dispatcher {
         self.view.cancel_pending_click_rename();
         let activated_directory =
             press.is(PREVIEW.in_map(Map::Default)) && self.view.activate_directory_on_space();
-        if !activated_directory {
-            self.preview.toggle(
-                preview_target(browser.focused_entry()),
-                browser.active_depth(),
-            );
+        if activated_directory {
+            return;
         }
+        let focused = browser.focused_entry();
+        // A folder, or a column with nothing focused, has nothing to preview: Space
+        // only closes a drawer that is already open there.
+        if !self.preview.is_open() && focused.as_ref().is_none_or(|entry| entry.is_directory()) {
+            return;
+        }
+        self.preview
+            .toggle(preview_target(focused), browser.active_depth());
     }
 
     fn selection_navigation(&self, browser: &Browser, event: &KeyEvent) -> KeyResult {
@@ -305,7 +310,7 @@ impl Dispatcher {
 
     fn directory_navigation(&self, browser: &Rc<Browser>, event: &KeyEvent) -> KeyResult {
         let press = &event.press;
-        if self.opens_focused_in_new(browser, event) {
+        if self.opens_focused_in_new(browser, event) || self.makes_focused_column_first(event) {
             return Some(Propagation::Stop);
         }
         // Ahead of the Ctrl and Super guard, which a user's binding may hold.
@@ -333,6 +338,14 @@ impl Dispatcher {
             return false;
         };
         self.open_focused_in_new(browser, target)
+    }
+
+    fn makes_focused_column_first(&self, event: &KeyEvent) -> bool {
+        event.press.is(MAKE_FIRST_COLUMN)
+            && self.view.item_view_has_focus()
+            && !event.text_has_focus()
+            && self.chooser.is_none()
+            && self.view.make_focused_column_first()
     }
 
     fn directory_key(&self, browser: &Rc<Browser>, event: &KeyEvent) -> bool {

@@ -112,15 +112,16 @@ pub(super) use crate::ui::browser::desktop::{launch_terminal, open_location_at};
 #[cfg(test)]
 pub(in crate::ui) use crate::ui::browser::entry::catppuccin;
 pub(super) use crate::ui::browser::entry::{
-    FOLDER_TYPE_GROUP, OTHER_TYPE_GROUP, entry_filter, entry_icon, entry_model_value,
-    format_file_size, icon_for_name, metadata_needs_fill, model_type_group,
+    entry_filter, entry_icon, entry_model_value, format_file_size, icon_for_name,
+    metadata_needs_fill, model_type_group,
 };
 pub(crate) use crate::ui::browser::file_commands::{
     ConflictFocus, CreateRefusal, PinChange, TargetCommand, Yank, can_rename,
 };
 pub(super) use crate::ui::browser::inline_edit::{queue_rename, reveal_rename_row};
 pub(in crate::ui) use crate::ui::browser::listing_filter::{
-    FilterFocus, FilterStatus, results_step_target, scroll_results_to, selected_cursor,
+    FilterDescentHandler, FilterFocus, FilterStatus, bind_filter_descent, connect_path_separator,
+    results_step_target, scroll_results_to, selected_cursor,
 };
 pub(in crate::ui) use crate::ui::browser::location::ConnectOutcome;
 pub(super) use crate::ui::browser::pane_header::{

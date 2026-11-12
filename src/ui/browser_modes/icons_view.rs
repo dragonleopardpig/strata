@@ -210,7 +210,7 @@ impl IconsCardFactory {
     ) {
         let slow_click = Rc::new(SlowClickRename::default());
         let weak_state = self.state.clone().unwrap_or_default();
-        PreviewClick {
+        let activation_click = PreviewClick {
             browser: self.browser.clone(),
             state: weak_state.clone(),
             previews: self.previews.clone(),
@@ -231,6 +231,7 @@ impl IconsCardFactory {
             slow_click: slow_click.clone(),
         }
         .install(card, item);
+        activation_click.group_with(&content_click);
         FolderPeek {
             state: self.state.clone(),
             browser: self.browser.clone(),

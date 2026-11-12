@@ -2,6 +2,7 @@
 
 use super::conflict_dialog::{ConflictActions, ConflictChoice, ConflictPrompt};
 use super::{ConflictFocus, PendingSendToCompletion, SendToTransferContext};
+use crate::adapters::TransferTargetCollision;
 use crate::model::Location;
 use crate::services::{PasteItem, ShownName, TransferConflict};
 use crate::ui::browser::ViewState;
@@ -14,22 +15,11 @@ pub(super) struct TransferCollision {
     pub(super) source: Location,
     /// The name the paste will use, already held by the colliding item.
     pub(super) target_name: Option<ShownName>,
-    /// Both colliding items are directories, so their contents can be merged.
-    pub(super) mergeable: bool,
-    /// Both are folders or neither is, as a file and a folder never replace one another.
-    pub(super) replaceable: bool,
+    pub(super) kinds: TransferTargetCollision,
     pub(super) fixes_inside: bool,
 }
 
 impl TransferCollision {
-    fn allows(&self, conflict: TransferConflict) -> bool {
-        match conflict {
-            TransferConflict::Merge => self.mergeable,
-            TransferConflict::ReplaceExisting => self.replaceable,
-            TransferConflict::KeepBoth | TransferConflict::FailIfExists => true,
-        }
-    }
-
     fn paste_item(self, conflict: TransferConflict) -> PasteItem {
         PasteItem {
             source: self.source,
@@ -67,6 +57,27 @@ fn merge_explanation(collision: &TransferCollision, name: &str, folder: &str) ->
     }
 }
 
+/// Splits the collisions an Apply to All answer covers from those that still need their own
+/// prompt, such as a file meeting a folder after Replace.
+pub(super) fn covered_by_answer<T>(
+    remaining: Vec<T>,
+    conflict: TransferConflict,
+    kinds: impl Fn(&T) -> TransferTargetCollision,
+) -> (Vec<T>, Vec<T>) {
+    remaining
+        .into_iter()
+        .partition(|collision| kinds(collision).allows(conflict))
+}
+
+pub(super) fn unreplaceable_explanation(name: &str, folder: &str) -> String {
+    rust_i18n::t!(
+        "An item named “%{name}” already exists in %{folder}. A file and a folder can’t replace one another.",
+        name = name,
+        folder = folder
+    )
+    .into_owned()
+}
+
 pub(super) fn conflict_explanation(
     collision: &TransferCollision,
     destination: &Location,
@@ -83,13 +94,8 @@ pub(super) fn conflict_explanation(
     let folder = compact_display_path(destination);
     let choice = if merge {
         merge_explanation(collision, &name, &folder)
-    } else if !collision.replaceable {
-        rust_i18n::t!(
-            "An item named “%{name}” already exists in %{folder}. A file and a folder can’t replace one another.",
-            name = name,
-            folder = folder
-        )
-        .into_owned()
+    } else if !collision.kinds.replaceable {
+        unreplaceable_explanation(&name, &folder)
     } else {
         rust_i18n::t!(
             "An item named “%{name}” already exists in %{folder}. Replacing it will overwrite its contents.",
@@ -124,8 +130,15 @@ fn transfer_conflict_text(
     plan: &TransferPlan,
     merge: bool,
 ) -> String {
-    let explanation = conflict_explanation(collision, &plan.destination, merge);
-    if collision.replaceable && replaces_without_trash(&plan.destination) {
+    let mut explanation = conflict_explanation(collision, &plan.destination, merge);
+    // Undo cannot put back a source the merge deleted, so say so before the choice.
+    if merge && plan.move_sources {
+        explanation = crate::i18n::join_sentences(
+            &explanation,
+            &crate::i18n::tr("Merging removes the source folder and can’t be undone."),
+        );
+    }
+    if collision.kinds.replaceable && replaces_without_trash(&plan.destination) {
         format!(
             "{explanation}\n\n{}",
             crate::i18n::tr("Replaced items can't be moved to Trash here and will be deleted.")
@@ -157,10 +170,7 @@ fn apply_transfer_choice(
     if !apply_to_all {
         return (accepted, remaining);
     }
-    // Collisions the answer cannot apply to still need their own prompt.
-    let (covered, rest): (Vec<_>, Vec<_>) = remaining
-        .into_iter()
-        .partition(|collision| collision.allows(conflict));
+    let (covered, rest) = covered_by_answer(remaining, conflict, |collision| collision.kinds);
     accepted.extend(
         covered
             .into_iter()
@@ -182,16 +192,13 @@ impl ViewState {
         }
         let collision = collisions.remove(0);
         let name = collision.source.display_name();
-        // Merge stays copy-only: undoing a merged move cannot tell which
-        // destination contents the source actually owned. It stages what it
-        // overwrites in Trash, which `admin://` lacks.
-        let allow_merge =
-            collision.mergeable && !plan.move_sources && !plan.destination.is_administrator();
+        // Merge stages what it overwrites in Trash, which `admin://` lacks.
+        let allow_merge = collision.kinds.mergeable && !plan.destination.is_administrator();
         let explanation = transfer_conflict_text(&collision, &plan, allow_merge);
         let (apply_to_all_visible, skip_visible) =
             ConflictPrompt::visibility(collisions.len(), accepted.len());
         let actions = ConflictActions {
-            replace: collision.replaceable,
+            replace: collision.kinds.replaceable,
             keep_both: true,
             merge: allow_merge,
             focus: plan.focus,

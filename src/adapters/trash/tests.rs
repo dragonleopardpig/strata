@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 use super::*;
+use crate::test_support::PrivateContext;
 use std::{cell::Cell, rc::Rc};
 
 fn unique_fixture_root(label: &str) -> std::path::PathBuf {
@@ -9,6 +10,48 @@ fn unique_fixture_root(label: &str) -> std::path::PathBuf {
         .expect("the system clock should be after the Unix epoch")
         .as_nanos();
     std::env::temp_dir().join(format!("strata-trash-{label}-{unique}"))
+}
+
+#[test]
+fn delete_errors_count_as_deleted_only_when_absence_is_confirmed() {
+    let root = tempfile::tempdir().expect("fixture");
+    std::fs::write(root.path().join("present"), b"keep").expect("file");
+
+    PrivateContext::new().block_on(async {
+        for (name, code, deleted) in [
+            ("missing", gio::IOErrorEnum::Failed, true),
+            ("missing", gio::IOErrorEnum::Cancelled, false),
+            ("present", gio::IOErrorEnum::Failed, false),
+            ("present/child", gio::IOErrorEnum::Failed, false),
+        ] {
+            let info = gio::FileInfo::new();
+            info.set_display_name(name);
+            let error = glib::Error::new(code, "original delete error");
+            let expected_errors = if deleted {
+                Vec::new()
+            } else {
+                vec![format!("{name}: {error}")]
+            };
+            let mut outcome = EmptyTrashOutcome {
+                deleted: 0,
+                failed: 0,
+                errors: Vec::new(),
+            };
+            outcome
+                .record_deletion(
+                    &gio::File::for_path(root.path().join(name)),
+                    &info,
+                    Err(error),
+                )
+                .await;
+            assert_eq!(
+                (outcome.deleted, outcome.failed),
+                if deleted { (1, 0) } else { (0, 1) },
+                "{name} {code:?}"
+            );
+            assert_eq!(outcome.errors, expected_errors, "{name} {code:?}");
+        }
+    });
 }
 
 #[test]
@@ -24,7 +67,7 @@ fn empty_trash_deletes_every_top_level_entry_in_bounded_batches() {
 
     let last_progress = Rc::new(Cell::new(0_usize));
     let progress_tick = last_progress.clone();
-    let outcome = glib::MainContext::new()
+    let outcome = PrivateContext::new()
         .block_on(empty_trash(&gio::File::for_path(&root), move |processed| {
             progress_tick.set(processed);
         }))
@@ -55,7 +98,7 @@ fn aborting_empty_trash_stops_deletion_mid_flight() {
             .expect("the trash fixture file should be written");
     }
 
-    let context = glib::MainContext::new();
+    let context = PrivateContext::new();
     let (progress_before_abort, progress_after_abort) = context
         .with_thread_default(|| {
             let progress = Rc::new(Cell::new(0_usize));
@@ -115,7 +158,7 @@ fn deletion_caps_errors_and_still_processes_successful_siblings() {
         std::fs::write(root.path().join(format!("file-{index}")), b"remove").expect("file");
     }
     let mut progress = Vec::new();
-    let outcome = glib::MainContext::new()
+    let outcome = PrivateContext::new()
         .block_on(empty_trash(
             &gio::File::for_path(root.path()),
             |processed| progress.push(processed),
@@ -179,7 +222,7 @@ fn emptying_the_trash_releases_a_preview_of_a_trashed_file() {
         present
     });
 
-    let outcome = glib::MainContext::new()
+    let outcome = PrivateContext::new()
         .block_on(empty_releasing(
             &gio::File::for_path(&root),
             vec![root.clone()],

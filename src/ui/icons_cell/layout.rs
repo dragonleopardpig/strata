@@ -304,9 +304,9 @@ mod imp {
                     .measure(gtk::Orientation::Vertical, progress_width)
                     .1
             });
-            let reserved_details = details_widget
-                .as_ref()
-                .map_or(0, |details| details.measure(gtk::Orientation::Vertical, width).1);
+            let reserved_details = details_widget.as_ref().map_or(0, |details| {
+                details.measure(gtk::Orientation::Vertical, width).1
+            });
             let max_caption_height = if reserved_progress > 0 {
                 (height - reserved_progress - reserved_details)
                     .max(ICONS_CARD_LABEL_LINE_PX)

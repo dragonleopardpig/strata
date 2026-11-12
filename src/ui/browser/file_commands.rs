@@ -30,6 +30,7 @@ pub(crate) struct NumberedActions {
     pub(crate) actions: Vec<Rc<ActionHandle>>,
     paths: Vec<PathBuf>,
     parent: Option<PathBuf>,
+    source: InvocationSource,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -213,9 +214,7 @@ impl BrowserView {
         };
         crate::services::validate_basename(name).map_err(CreateRefusal::Invalid)?;
         let Some((_, parent)) = self.new_entry_parent().filter(|(_, parent)| {
-            !is_trash_location(parent)
-                && !parent.is_recent_location()
-                && !parent.is_computer_root()
+            !is_trash_location(parent) && !parent.is_recent_location() && !parent.is_computer_root()
         }) else {
             return Err(CreateRefusal::Unsupported);
         };
@@ -464,6 +463,16 @@ impl BrowserView {
         }
     }
 
+    pub fn toggle_focused_folders_first(&self) {
+        if let Some(depth) = self.focused_listing_depth()
+            && self.state.browser.toggle_folders_first(depth)
+        {
+            self.state
+                .keyboard_refocus
+                .set(Some(KeyboardRefocus::Sort(depth)));
+        }
+    }
+
     pub fn sort_focused_pane(&self, key: SortKey, direction: SortDirection) {
         if let Some(depth) = self.focused_listing_depth() {
             self.state.browser.set_sort(depth, key, direction);
@@ -471,6 +480,12 @@ impl BrowserView {
                 .keyboard_refocus
                 .set(Some(KeyboardRefocus::Sort(depth)));
         }
+    }
+
+    pub(crate) fn keyboard_bookmark_folder(&self) -> Option<std::path::PathBuf> {
+        self.focused_listing_depth()
+            .and_then(|depth| self.state.browser.location_at(depth))
+            .and_then(|location| location.native_path().map(std::path::PathBuf::from))
     }
 
     pub fn open_focused_folder_terminal(&self) -> bool {
@@ -490,8 +505,13 @@ impl BrowserView {
         self.state.refocus_cursor();
     }
 
-    pub(crate) fn numbered_actions(&self) -> NumberedActions {
-        self.actions_for_targets(ActionCatalog::numbered)
+    /// The first ten actions for the targets, or with `Background` for the
+    /// keyboard-focused folder as its background menu offers them.
+    pub(crate) fn numbered_actions(&self, source: InvocationSource) -> NumberedActions {
+        match source {
+            InvocationSource::Selection => self.actions_for_targets(ActionCatalog::numbered),
+            InvocationSource::Background => self.actions_for_folder(),
+        }
     }
 
     /// The targets and the action at `index` in Settings → Actions' order,
@@ -507,16 +527,40 @@ impl BrowserView {
         Some((numbered, action))
     }
 
+    fn focused_folder(&self) -> Option<Location> {
+        self.focused_listing_depth()
+            .and_then(|depth| self.state.browser.location_at(depth))
+    }
+
+    fn actions_for_folder(&self) -> NumberedActions {
+        let folder = self.focused_folder();
+        let parent = folder
+            .as_ref()
+            .and_then(|location| location.native_path().map(PathBuf::from));
+        let actions = folder
+            .as_ref()
+            .and_then(crate::ui::actions::folder_input)
+            .map_or_else(Vec::new, |input| {
+                crate::ui::actions::shared().catalog().numbered(&[input])
+            });
+        NumberedActions {
+            targets: folder.into_iter().collect(),
+            actions,
+            paths: parent.iter().cloned().collect(),
+            parent,
+            source: InvocationSource::Background,
+        }
+    }
+
     fn actions_for_targets(
         &self,
         choose: impl FnOnce(&ActionCatalog, &[ActionInput]) -> Vec<Rc<ActionHandle>>,
     ) -> NumberedActions {
+        let parent = self
+            .focused_folder()
+            .and_then(|location| location.native_path().map(PathBuf::from));
         let entries = self.command_targets();
         let targets = entries.iter().map(|entry| entry.location.clone()).collect();
-        let parent = self
-            .focused_listing_depth()
-            .and_then(|depth| self.state.browser.location_at(depth))
-            .and_then(|location| location.native_path().map(PathBuf::from));
         let (inputs, paths) = match (
             crate::ui::actions::inputs_for_entries(&entries),
             crate::ui::actions::native_paths(&entries),
@@ -534,6 +578,7 @@ impl BrowserView {
             actions,
             paths,
             parent,
+            source: InvocationSource::Selection,
         }
     }
 
@@ -547,7 +592,7 @@ impl BrowserView {
             action,
             numbered.paths,
             parent,
-            InvocationSource::Selection,
+            numbered.source,
             Some(Rc::new(move || {
                 if let Some(browser) = browser.upgrade() {
                     browser.focus_active();

@@ -69,7 +69,6 @@ pub(crate) use chooser::{cancel_chooser, present_chooser};
 #[cfg(feature = "qa")]
 pub(crate) use enter_target::CSS_CLASS as ENTER_TARGET_CLASS;
 pub(crate) use settings::schedule_rollback_cleanup;
-pub(crate) use window::{default_save_folder, refresh_sidebars};
 #[cfg(test)]
 pub(in crate::ui) use window::offer_removable_destinations_for_test;
 pub(in crate::ui) use window::{
@@ -77,11 +76,12 @@ pub(in crate::ui) use window::{
     send_to_recent_folders, watch_removable_destinations,
 };
 pub use window::{UnlockTarget, present, present_open, present_reveal, present_unlock};
+pub(crate) use window::{default_save_folder, refresh_sidebars};
 #[cfg(feature = "qa")]
 pub(crate) use {inline_search::SEARCH_RESULTS_LABEL, preview::PREVIEW_LABEL};
 
 pub(crate) fn prepare_portal_ui() {
-    let _theme = theme::ThemeManager::shared();
+    let _theme = theme::ThemeManager::shared_without_portal_wait();
 }
 
 pub(crate) fn read_install_facts() {

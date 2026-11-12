@@ -473,6 +473,7 @@ impl MountTable {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn fs_type_for(&self, path: &Path) -> Option<&str> {
         self.innermost(path)
             .map(|entry| entry.mount_type.fs_type.as_str())
@@ -509,11 +510,12 @@ impl MountTable {
         })
     }
 
-    /// Remote filesystems other than FUSE drivers for local block devices,
-    /// such as ntfs-3g and exfat-fuse on a USB drive.
-    pub(crate) fn is_network_path(&self, path: &Path) -> bool {
-        self.innermost(path)
-            .is_some_and(|entry| entry.mount_type.outside_writers())
+    /// Remote filesystems other than FUSE drivers for local storage: block
+    /// devices (ntfs-3g, exfat-fuse) and overlays such as mergerfs.
+    pub(crate) fn is_remote_share(&self, path: &Path) -> bool {
+        self.innermost(path).is_some_and(|entry| {
+            entry.mount_type.outside_writers() && !is_local_fuse_overlay(&entry.mount_type.fs_type)
+        })
     }
 
     pub(crate) fn has_mount_inside(&self, directory: &Path) -> bool {
@@ -568,7 +570,7 @@ pub(crate) fn is_fuse_fs_type(fs_type: &str) -> bool {
 
 /// FUSE filesystems that layer or encrypt local storage rather than reach a
 /// remote provider.
-pub(crate) fn is_local_fuse_overlay(fs_type: &str) -> bool {
+fn is_local_fuse_overlay(fs_type: &str) -> bool {
     matches!(
         fs_type.strip_prefix("fuse."),
         Some(
@@ -699,7 +701,7 @@ pub(crate) fn is_local_block_in_table(table: &MountTable, path: &Path) -> bool {
     if path == Path::new("/") {
         return true;
     }
-    if table.is_network_path(path) {
+    if table.is_remote_share(path) {
         return false;
     }
     table
@@ -707,7 +709,9 @@ pub(crate) fn is_local_block_in_table(table: &MountTable, path: &Path) -> bool {
         .is_some_and(|source| source.starts_with("/dev"))
 }
 
-static USAGE_CACHE: LazyLock<Mutex<HashMap<PathBuf, (Option<(u64, u64)>, Instant)>>> =
+type UsageCacheEntry = (Option<(u64, u64)>, Instant);
+
+static USAGE_CACHE: LazyLock<Mutex<HashMap<PathBuf, UsageCacheEntry>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
 static PENDING_PROBES: LazyLock<Mutex<HashSet<PathBuf>>> =

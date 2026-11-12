@@ -2,7 +2,7 @@
 
 use super::{
     LocationValidationError, UriCredentials, backend_unavailable_message, error_detail_in,
-    io_error_message, sanitize_uri_credentials, validate_uri_credentials,
+    gio_device_error_message, io_error_message, sanitize_uri_credentials, validate_uri_credentials,
 };
 
 #[test]
@@ -177,6 +177,21 @@ fn sanitized_uris_keep_gio_percent_encoding() {
 }
 
 #[test]
+fn non_ascii_hosts_are_preserved_verbatim() {
+    // MTP device names may contain non-ASCII characters ("一加" below): GUri
+    // re-serialization IDNA-encodes the host (mtp://OnePlus_一加_... becomes
+    // mtp://xn--...), which the gvfs backend cannot match to its device name,
+    // so the location stays permanently NotMounted.
+    assert_eq!(
+        sanitize_uri_credentials("mtp://OnePlus_%E4%B8%80%E5%8A%A0_Ace_5_Pro_9d231cfe/"),
+        Ok((
+            "mtp://OnePlus_%E4%B8%80%E5%8A%A0_Ace_5_Pro_9d231cfe/".to_owned(),
+            None
+        )),
+    );
+}
+
+#[test]
 fn malformed_uris_fail_without_echoing_input() {
     assert_eq!(
         validate_uri_credentials("smb://user%ZZ@host/share"),
@@ -257,4 +272,23 @@ fn default_fill_reports_unsupported_synchronously() {
             outcome: MetadataOutcome::Unsupported,
         }]
     ));
+}
+
+#[test]
+fn busy_device_failures_read_as_in_use() {
+    use gtk::{gio::IOErrorEnum, glib::Error};
+    for busy in [
+        "Error ejecting /dev/sr0: eject: cannot open /dev/sr0: Device or resource busy",
+        "Error mounting /dev/loop0 at /run/media/me/live: /dev/loop0 already mounted or mount point busy",
+    ] {
+        assert_eq!(
+            gio_device_error_message(&Error::new(IOErrorEnum::Failed, busy)),
+            "The item is in use"
+        );
+    }
+    let labelled = "Error mounting /dev/sdb1 at /run/media/me/BUSYBOX: wrong fs type";
+    assert_eq!(
+        gio_device_error_message(&Error::new(IOErrorEnum::Failed, labelled)),
+        labelled
+    );
 }

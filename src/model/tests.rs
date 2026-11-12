@@ -111,7 +111,10 @@ fn computer_root_is_named_and_has_no_product_parent() {
 fn every_computer_root_spelling_is_treated_as_the_computer_root() {
     for uri in ["computer:///", "computer://", "COMPUTER:///"] {
         let location = Location::uri(uri);
-        assert!(location.is_computer_root(), "{uri} should be the Computer root");
+        assert!(
+            location.is_computer_root(),
+            "{uri} should be the Computer root"
+        );
         assert_eq!(location.display_name(), "Computer");
         assert_eq!(location.parent(), None);
     }

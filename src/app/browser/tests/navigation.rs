@@ -730,6 +730,8 @@ struct FolderTree {
     /// While set, listings wait for `release` instead of answering at once.
     held: Cell<bool>,
     pending: RefCell<Vec<(DirectoryRequest, DirectoryEmit)>>,
+    hold_validation: Cell<bool>,
+    validations: RefCell<Vec<Validation>>,
 }
 
 impl FolderTree {
@@ -766,6 +768,15 @@ impl FolderTree {
         }
     }
 
+    fn answer_validation(&self, location: &Location) {
+        let pending = self.validations.take();
+        let (_, emit) = pending
+            .into_iter()
+            .find(|(validated, _)| validated == location)
+            .expect("a pending validation");
+        emit(Ok(()));
+    }
+
     fn answer(&self, request: &DirectoryRequest, emit: &DirectoryEmit) {
         let entries = self
             .listings
@@ -798,6 +809,19 @@ fn tree_location(path: &str) -> Location {
 impl FileSource for FolderTree {
     fn validate_location(&self, _: &Location) -> Result<(), LocationValidationError> {
         Ok(())
+    }
+
+    fn validate_location_async(
+        &self,
+        location: Location,
+        emit: Rc<dyn Fn(Result<(), LocationValidationError>)>,
+    ) -> LoadHandle {
+        if self.hold_validation.get() {
+            self.validations.borrow_mut().push((location, emit));
+        } else {
+            emit(Ok(()));
+        }
+        LoadHandle::new(|| {})
     }
 
     fn enumerate(&self, request: DirectoryRequest, emit: Rc<dyn Fn(DirectoryEvent)>) -> LoadHandle {
@@ -1028,6 +1052,56 @@ fn after_back_file_commands_in_an_ancestor_column_never_target_its_parents_folde
 }
 
 #[test]
+fn making_a_column_first_keeps_later_columns_focus_and_cursor() {
+    let (browser, ..) = folder_browser(FolderTree::with(&[
+        ("/a", &["b"]),
+        ("/a/b", &["c", "d"]),
+        ("/a/b/c", &["e"]),
+    ]));
+    browser.navigate(Location::local("/a"));
+    browser.descend(0, Location::local("/a/b"));
+    browser.descend(1, Location::local("/a/b/c"));
+    browser.select(1, 0);
+    browser.extend_selection(1);
+    let strip = |browser: &Rc<Browser>| {
+        (0..)
+            .map_while(|depth| browser.location_at(depth))
+            .collect::<Vec<_>>()
+    };
+
+    assert!(browser.make_first_column(1));
+
+    assert_eq!(
+        strip(&browser),
+        [Location::local("/a/b"), Location::local("/a/b/c")]
+    );
+    assert_eq!(browser.active_depth(), Some(0));
+    assert_eq!(focused_location(&browser), Some(Location::local("/a/b/d")));
+    assert_eq!(
+        super::location_input::selected_locations(&browser),
+        [Location::local("/a/b/c"), Location::local("/a/b/d")]
+    );
+
+    assert!(!browser.make_first_column(0));
+    assert!(!browser.make_first_column(2));
+    assert_eq!(
+        strip(&browser),
+        [Location::local("/a/b"), Location::local("/a/b/c")],
+        "the first column has nothing to drop"
+    );
+
+    browser.back();
+    assert_eq!(
+        strip(&browser),
+        [
+            Location::local("/a"),
+            Location::local("/a/b"),
+            Location::local("/a/b/c")
+        ]
+    );
+}
+
+#[test]
 fn returning_to_a_non_ancestor_keeps_the_first_entry() {
     let (browser, ..) = folder_browser(FolderTree::with(&[
         ("/a", &["a1", "a2"]),
@@ -1151,3 +1225,5 @@ fn a_remote_reload_announces_the_neighbour_cursor_of_an_inactive_column() {
         "the child column's cursor moves to z and is published"
     );
 }
+
+mod returning_columns;

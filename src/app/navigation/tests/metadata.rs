@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 
-use super::*;
 use super::super::metadata::apply_metadata_update;
+use super::*;
 
 /// The details a metadata fill can supply for an entry.
 #[derive(Debug, PartialEq)]
@@ -302,6 +302,12 @@ fn computer_item_capacity_is_preserved_across_metadata_updates() {
 
     assert!(apply_metadata_update(&mut computer_entry, &update));
     assert_eq!(computer_entry.size, MetadataValue::Known(1_000_000_000));
-    assert_eq!(computer_entry.child_count, MetadataValue::Known(400_000_000));
-    assert_eq!(computer_entry.modified_unix_seconds, MetadataValue::Known(12345));
+    assert_eq!(
+        computer_entry.child_count,
+        MetadataValue::Known(400_000_000)
+    );
+    assert_eq!(
+        computer_entry.modified_unix_seconds,
+        MetadataValue::Known(12345)
+    );
 }

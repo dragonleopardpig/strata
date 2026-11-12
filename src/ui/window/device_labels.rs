@@ -19,12 +19,11 @@ fn find_row_label(row: &gtk::Button) -> Option<gtk::Label> {
     if let Ok(label) = last.clone().downcast::<gtk::Label>() {
         return Some(label);
     }
-    if let Ok(text_box) = last.downcast::<gtk::Box>() {
-        if let Some(first) = text_box.first_child() {
-            if let Ok(label) = first.downcast::<gtk::Label>() {
-                return Some(label);
-            }
-        }
+    if let Ok(text_box) = last.downcast::<gtk::Box>()
+        && let Some(first) = text_box.first_child()
+        && let Ok(label) = first.downcast::<gtk::Label>()
+    {
+        return Some(label);
     }
     None
 }

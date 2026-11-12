@@ -11,17 +11,11 @@ use gtk::{gio, prelude::*};
 
 use crate::adapters::MountTable;
 
-fn mounted_devices(table: &MountTable) -> Vec<PathBuf> {
-    table
-        .sources()
-        .filter(|(point, source)| {
-            source.starts_with("/dev")
-                && point.is_absolute()
-                && !gio_unix::functions::is_mount_path_system_internal(point)
-        })
-        .map(|(point, _)| point.to_owned())
-        .collect()
-}
+mod held;
+mod probe_cache;
+
+pub(super) use held::{is_exclusively_held, is_system_loop};
+use probe_cache::ProbeCache;
 
 pub(super) fn block_device_from_mount_table(table: &MountTable, path: &Path) -> Option<PathBuf> {
     table
@@ -569,15 +563,8 @@ pub(super) fn encrypted_device_is_locked(
     }
 }
 
-#[derive(Default)]
-struct CryptoHints {
-    known: RefCell<HashMap<String, BlockCryptoHint>>,
-    pending: RefCell<HashSet<String>>,
-    monitor: OnceCell<gio::VolumeMonitor>,
-}
-
 thread_local! {
-    static CRYPTO_HINTS: CryptoHints = CryptoHints::default();
+    static CRYPTO_HINTS: ProbeCache<BlockCryptoHint> = ProbeCache::default();
 }
 
 pub(super) fn block_crypto_hint(unix_device: &str) -> BlockCryptoHint {
@@ -588,56 +575,7 @@ fn block_crypto_hint_with(
     unix_device: &str,
     probe: fn(&str) -> BlockCryptoHint,
 ) -> BlockCryptoHint {
-    CRYPTO_HINTS.with(|hints| {
-        hints.monitor.get_or_init(|| {
-            let monitor = gio::VolumeMonitor::get();
-            let recheck = move || recheck_crypto_hints(probe);
-            monitor.connect_volume_added(move |_, _| recheck());
-            monitor.connect_volume_removed(move |_, _| recheck());
-            monitor.connect_volume_changed(move |_, _| recheck());
-            monitor.connect_drive_connected(move |_, _| recheck());
-            monitor.connect_drive_disconnected(move |_, _| recheck());
-            monitor.connect_drive_changed(move |_, _| recheck());
-            monitor
-        });
-    });
-    let known = CRYPTO_HINTS.with(|hints| hints.known.borrow().get(unix_device).cloned());
-    known.unwrap_or_else(|| {
-        probe_crypto_hint(unix_device.to_owned(), probe);
-        BlockCryptoHint::default()
-    })
-}
-
-fn recheck_crypto_hints(probe: fn(&str) -> BlockCryptoHint) {
-    let devices: Vec<String> =
-        CRYPTO_HINTS.with(|hints| hints.known.borrow().keys().cloned().collect());
-    for device in devices {
-        probe_crypto_hint(device, probe);
-    }
-}
-
-fn probe_crypto_hint(unix_device: String, probe: fn(&str) -> BlockCryptoHint) {
-    if !CRYPTO_HINTS.with(|hints| hints.pending.borrow_mut().insert(unix_device.clone())) {
-        return;
-    }
-    gtk::glib::MainContext::default().spawn_local(async move {
-        let device = unix_device.clone();
-        let hint = gio::spawn_blocking(move || probe(&device))
-            .await
-            .unwrap_or_default();
-        let changed = CRYPTO_HINTS.with(|hints| {
-            hints.pending.borrow_mut().remove(&unix_device);
-            let seen = hints
-                .known
-                .borrow_mut()
-                .insert(unix_device, hint.clone())
-                .unwrap_or_default();
-            seen != hint
-        });
-        if changed {
-            super::device_release::refresh_sidebars();
-        }
-    });
+    probe_cache::cached(&CRYPTO_HINTS, unix_device, probe)
 }
 
 fn probe_block_crypto(unix_device: &str) -> BlockCryptoHint {
@@ -879,15 +817,99 @@ pub(super) fn password_drive_is_orphaned(
     should_list_orphaned_password_drive(start_stop, covered)
 }
 
-pub(super) fn global_search_roots() -> Vec<PathBuf> {
-    let monitor = gio::VolumeMonitor::get();
-    let roots = monitor
+/// How Devices lists a mount from the volume monitor's mount list.
+#[derive(Clone, Copy, Debug)]
+struct MountListing {
+    shadowed: bool,
+    volume_listed: bool,
+}
+
+impl MountListing {
+    fn of(mount: &gio::Mount, volumes: &[gio::Volume]) -> Self {
+        Self {
+            shadowed: mount.is_shadowed(),
+            volume_listed: mount
+                .volume()
+                .is_some_and(|volume| volumes.contains(&volume)),
+        }
+    }
+
+    /// A listed volume's row already stands for its mount.
+    fn has_own_row(self) -> bool {
+        !self.shadowed && !self.volume_listed
+    }
+}
+
+/// A mount's root, read as `location_for_file` reads it.
+#[derive(Clone, Debug)]
+struct MountRoot {
+    native: bool,
+    path: Option<PathBuf>,
+}
+
+impl MountRoot {
+    fn of(mount: &gio::Mount) -> Self {
+        let root = mount.root();
+        Self {
+            native: root.is_native(),
+            path: root.path(),
+        }
+    }
+
+    /// GVfs FUSE mirrors of remote shares have a path but are not native.
+    fn local_path(self) -> Option<PathBuf> {
+        self.path.filter(|_| self.native)
+    }
+}
+
+/// The mounts Devices lists on their own rows: unshadowed mounts whose volume
+/// does not already have a row.
+pub(super) fn mounts_without_listed_volumes(
+    monitor: &gio::VolumeMonitor,
+    volumes: &[gio::Volume],
+) -> Vec<gio::Mount> {
+    monitor
         .mounts()
         .into_iter()
-        .filter(|mount| !mount.is_shadowed())
-        .filter_map(|mount| mount.root().path())
-        .chain(mounted_devices(&crate::adapters::mount_watch::latest()));
-    search_roots(&super::home_directory(), roots)
+        .filter(|mount| MountListing::of(mount, volumes).has_own_row())
+        .collect()
+}
+
+fn local_device_roots(
+    volume_mounts: impl IntoIterator<Item = MountRoot>,
+    other_mounts: impl IntoIterator<Item = (MountRoot, MountListing)>,
+) -> Vec<PathBuf> {
+    volume_mounts
+        .into_iter()
+        .chain(
+            other_mounts
+                .into_iter()
+                .filter(|(_, listing)| listing.has_own_row())
+                .map(|(root, _)| root),
+        )
+        .filter_map(MountRoot::local_path)
+        .collect()
+}
+
+/// Taken from the volume monitor alone, so search skips what the backend
+/// hides, such as btrfs subvolume mounts.
+fn device_mount_roots() -> Vec<PathBuf> {
+    let monitor = gio::VolumeMonitor::get();
+    let volumes = monitor.volumes();
+    let volume_mounts: Vec<_> = volumes
+        .iter()
+        .filter_map(VolumeExt::get_mount)
+        .map(|mount| MountRoot::of(&mount))
+        .collect();
+    let other_mounts = monitor
+        .mounts()
+        .into_iter()
+        .map(|mount| (MountRoot::of(&mount), MountListing::of(&mount, &volumes)));
+    local_device_roots(volume_mounts, other_mounts)
+}
+
+pub(super) fn global_search_roots() -> Vec<PathBuf> {
+    search_roots(&super::home_directory(), device_mount_roots())
 }
 
 fn search_roots(home: &Path, mounts: impl IntoIterator<Item = PathBuf>) -> Vec<PathBuf> {

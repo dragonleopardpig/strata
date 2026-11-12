@@ -29,7 +29,7 @@ pub(crate) use command::{
     Command, Group, Keymap, Kind as CommandKind, Map, Matcher, Rejected, registry,
 };
 pub(crate) use label::{
-    Digits, Keys, Shown, digit_label, label, label_in, label_in_map, modifiers_label,
+    Digits, Keys, Letters, Shown, digit_label, label, label_in, label_in_map, modifiers_label,
     modifiers_label_in, search_text, shown,
 };
 
@@ -54,7 +54,7 @@ pub(crate) const TEXT_EDITING: [(Command, &str); 6] = [
 /// a map whose own stages leave them out: 10xer verbs, chord steps and paging
 /// in the default map, and default-map verbs in 10xer. Neither table binds
 /// them by default.
-pub(crate) const DIRECT_IN_DEFAULT: [Command; 26] = [
+pub(crate) const DIRECT_IN_DEFAULT: [Command; 27] = [
     bindings::OPEN_WITH,
     bindings::MOVE_TO,
     bindings::COPY_TO,
@@ -73,6 +73,7 @@ pub(crate) const DIRECT_IN_DEFAULT: [Command; 26] = [
     bindings::SORT_BY_NATURAL,
     bindings::SORT_BY_ALPHABETICAL,
     bindings::SORT_BY_CASE_SENSITIVE,
+    bindings::SORT_BY_FOLDERS_FIRST,
     bindings::COPY_AS_PATH,
     bindings::COPY_AS_NAME,
     bindings::INVERT_SELECTION,
@@ -319,6 +320,17 @@ impl KeyPress {
         self.digit.filter(|digit| {
             self.state & compared == digits.modifiers() & compared && digits.contains(*digit)
         })
+    }
+
+    /// The plain letter **a**–**z** pressed, read through the Latin fallback
+    /// as bindings are, for a [`Letters`] slot. Any held modifier, Shift
+    /// included, makes it no letter.
+    pub(crate) fn letter(&self) -> Option<char> {
+        let (key, modifiers) = self.physical_key();
+        let letter = key.to_unicode().filter(char::is_ascii_lowercase)?;
+        (modifiers & SHORTCUT_MODIFIERS)
+            .is_empty()
+            .then_some(letter)
     }
 
     /// The typed character, for typing consumers only. Nothing is typed while

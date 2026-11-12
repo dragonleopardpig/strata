@@ -94,4 +94,3 @@ fn paned_separator_is_configured_with_resize_cursor_and_wide_handle() {
         Some("col-resize")
     );
 }
-

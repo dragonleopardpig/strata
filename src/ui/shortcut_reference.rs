@@ -343,7 +343,7 @@ pub(crate) fn menu_accelerator(keys: Keys) -> Option<Binding> {
     match keys {
         One(shown) => shown.primary(),
         Any(shown) => shown.first().and_then(|shown| shown.primary()),
-        Chord(_) | Keys::Digits(_) | Mixed(_) => None,
+        Chord(_) | Keys::Digits(_) | Keys::Letters(_) | Mixed(_) => None,
     }
 }
 
@@ -461,6 +461,10 @@ const COLUMNS_NAVIGATION: &[Shortcut] = &[
     row(
         One(BACKSPACE.shown()),
         "Close the current pane or go to the parent folder",
+    ),
+    row(
+        One(MAKE_FIRST_COLUMN.shown()),
+        "Make the focused pane the first pane",
     ),
 ];
 
@@ -797,6 +801,14 @@ fn tenxer_places(chooser: bool) -> Vec<Shortcut> {
                 Mixed(&[Chord(shown![GO, GO_PIN]), Chord(shown![GO, GO_UNPIN])]),
                 "Pin / unpin a folder",
             ),
+            row(
+                Keys::Letters(BOOKMARK_SET_LETTERS),
+                "Save current folder under a letter",
+            ),
+            row(
+                Keys::Letters(BOOKMARK_GO_LETTERS),
+                "Jump to a bookmarked folder by letter",
+            ),
         ]);
     }
     shortcuts.extend_from_slice(&[
@@ -1075,6 +1087,10 @@ const TENXER_FILES: &[Shortcut] = &[
         "Run one of the first ten matching custom actions",
     ),
     row(
+        Keys::Digits(ACTIONS_FOLDER_NUMBERS),
+        "Run one of the first ten custom actions for the focused folder",
+    ),
+    row(
         Chord(shown![ACTIONS, ACTIONS_TERMINAL]),
         "Open a terminal in the focused folder",
     ),
@@ -1260,6 +1276,11 @@ fn tenxer_mode_rows(
 
 const DEFAULT_TOOLS: &[Shortcut] = &[
     row(One(FILTER.shown()), "Filter the current pane"),
+    within(
+        "%{keys} in a filter",
+        One(FILTER_DESCEND.shown()),
+        "Enter the first matching folder",
+    ),
     row(One(SEARCH.shown()), "Open global search"),
     row(One(JUMP_TO_FOLDER.shown()), "Jump to a recent folder"),
     row(
@@ -1346,6 +1367,11 @@ const TENXER_FIND: &[Shortcut] = &[
         "Dismiss the find highlights",
     ),
     row(One(FILTER.shown()), "Filter this listing"),
+    within(
+        "%{keys} in a filter",
+        One(FILTER_DESCEND.shown()),
+        "Enter the highlighted or first matching folder",
+    ),
     within(
         "%{keys} after a filter",
         One(ESCAPE.shown()),
@@ -1471,6 +1497,10 @@ const TENXER_VIEW: &[Shortcut] = &[
     row(
         Chord(shown![SORT_BY, SORT_BY_CASE_SENSITIVE]),
         "Case-sensitive names",
+    ),
+    row(
+        Chord(shown![SORT_BY, SORT_BY_FOLDERS_FIRST]),
+        "Folders first",
     ),
     row(VIEW_MODES, "Switch to Columns, Icons, List, or Compact"),
     row(TEXT_SIZE, "Increase / decrease / reset text size"),

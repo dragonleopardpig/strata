@@ -308,18 +308,18 @@ impl ViewState {
     }
 
     pub(in crate::ui) fn register_active_context_popover(&self, popover: &gtk::Popover) {
-        self.active_context_popover.replace(Some(popover.downgrade()));
+        self.active_context_popover
+            .replace(Some(popover.downgrade()));
     }
 
     pub(in crate::ui) fn unregister_active_context_popover(&self, popover: &gtk::Popover) {
-        if let Ok(mut active) = self.active_context_popover.try_borrow_mut() {
-            if active
+        if let Ok(mut active) = self.active_context_popover.try_borrow_mut()
+            && active
                 .as_ref()
                 .and_then(|p| p.upgrade())
                 .is_some_and(|active| &active == popover)
-            {
-                active.take();
-            }
+        {
+            active.take();
         }
     }
 

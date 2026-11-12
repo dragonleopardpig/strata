@@ -88,6 +88,20 @@ impl NavigationState {
         Some(target)
     }
 
+    /// The path from `depth` on, recorded as a navigation so Back returns to
+    /// the whole strip. None for the first column or past the last.
+    pub fn go_to_column(&mut self, depth: usize) -> Option<NavigationPath> {
+        if depth == 0 {
+            return None;
+        }
+        let locations = self.current_path()?.locations.get(depth..)?.to_vec();
+        if locations.is_empty() {
+            return None;
+        }
+        self.record_navigation();
+        Some(NavigationPath::from_locations(locations))
+    }
+
     pub fn restore(
         &mut self,
         path: NavigationPath,
@@ -96,12 +110,19 @@ impl NavigationState {
         self.peek = None;
         self.visual = None;
         self.selection_commit = false;
+        let previous = std::mem::take(&mut self.columns);
+        let kept = |location: &Location| {
+            previous
+                .iter()
+                .find(|column| column.location == *location)
+                .map(|column| column.preferences)
+        };
         self.columns = path
             .locations
             .into_iter()
             .zip(request_ids)
             .map(|(location, request_id)| ColumnState {
-                preferences: self.initial_preferences(&location),
+                preferences: self.initial_preferences(&location, kept(&location)),
                 location,
                 entries: Vec::new(),
                 entry_counts: Cell::new(None),
@@ -126,6 +147,7 @@ impl NavigationState {
                 open_child_on_load: None,
                 reload_cursor: None,
                 load_cursor: None,
+                type_grouping: self.type_grouping,
             })
             .collect();
         self.active_column = self.columns.len().checked_sub(1);
@@ -183,7 +205,7 @@ impl NavigationState {
 
     pub(super) fn push_column(&mut self, location: Location, request_id: RequestId) {
         self.columns.push(ColumnState {
-            preferences: self.initial_preferences(&location),
+            preferences: self.initial_preferences(&location, None),
             location,
             entries: Vec::new(),
             entry_counts: Cell::new(None),
@@ -208,6 +230,7 @@ impl NavigationState {
             open_child_on_load: None,
             reload_cursor: None,
             load_cursor: None,
+            type_grouping: self.type_grouping,
         });
     }
 }

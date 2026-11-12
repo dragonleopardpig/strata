@@ -149,9 +149,9 @@ fn shell() -> String {
 }
 
 pub(super) fn terminate(pid: glib::Pid) {
-    if let Some(pid) = rustix::process::Pid::from_raw(pid.0) {
-        if rustix::process::kill_process_group(pid, rustix::process::Signal::HUP).is_err() {
-            let _ = rustix::process::kill_process(pid, rustix::process::Signal::HUP);
-        }
+    if let Some(pid) = rustix::process::Pid::from_raw(pid.0)
+        && rustix::process::kill_process_group(pid, rustix::process::Signal::HUP).is_err()
+    {
+        let _ = rustix::process::kill_process(pid, rustix::process::Signal::HUP);
     }
 }

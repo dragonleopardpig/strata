@@ -259,6 +259,24 @@ pub(crate) fn describes_refused_credentials(message: &str) -> bool {
     .any(|reason| message.contains(reason))
 }
 
+/// [`gio_error_message`] for mount, unmount and eject failures. UDisks and
+/// eject(1) report a busy device as `G_IO_ERROR_FAILED`, with the cause only
+/// in the system's own text.
+pub(crate) fn gio_device_error_message(error: &glib::Error) -> String {
+    if error.matches(gtk::gio::IOErrorEnum::Failed) && describes_busy_device(error.message()) {
+        return crate::i18n::tr("The item is in use");
+    }
+    gio_error_message(error)
+}
+
+/// Whole phrases, because these messages also carry device labels and mount paths.
+fn describes_busy_device(message: &str) -> bool {
+    let message = message.to_ascii_lowercase();
+    ["resource busy", "mount point busy", "target is busy"]
+        .iter()
+        .any(|reason| message.contains(reason))
+}
+
 fn gio_error_reason(error: &glib::Error) -> Option<&'static str> {
     use gtk::gio::IOErrorEnum;
     Some(match error.kind::<IOErrorEnum>() {
@@ -344,15 +362,49 @@ pub struct UriCredentials {
     pub password: String,
 }
 
+/// Host text (authority minus user-info and port) of a `scheme://` URI, verbatim.
+fn host_text(uri: &str) -> Option<&str> {
+    let rest = &uri[uri.find("://")? + 3..];
+    let authority_end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
+    let authority = &rest[..authority_end];
+    let hostport = authority.rsplit('@').next().unwrap_or(authority);
+    if hostport.is_empty() {
+        return None;
+    }
+    if let Some(bracketed) = hostport.strip_prefix('[') {
+        let end = bracketed.find(']')?;
+        Some(&hostport[..end + 2])
+    } else {
+        Some(hostport.split(':').next().filter(|host| !host.is_empty())?)
+    }
+}
+
+/// Like `Uri::to_str`, but the host keeps the input's original spelling.
+/// GUri IDNA-encodes non-ASCII hosts on re-serialization, which turns gvfs
+/// device URIs (mtp device names may contain CJK) into `xn--` names that the
+/// gvfs backend cannot resolve.
+fn to_str_preserving_host(input: &str, uri: &glib::Uri) -> String {
+    let normalized = uri.to_str().to_string();
+    match (host_text(input), host_text(&normalized)) {
+        (Some(raw_host), Some(norm_host)) if !raw_host.is_empty() && !norm_host.is_empty() => {
+            normalized.replacen(norm_host, raw_host, 1)
+        }
+        _ => normalized,
+    }
+}
+
 /// Removes URI user-info secrets while preserving the username separately.
 /// Path, query and fragment keep GIO's percent-encoding so non-UTF-8 names survive.
+/// The host is preserved verbatim from `input`: GUri re-serialization IDNA-encodes
+/// non-ASCII hosts (`mtp://OnePlus_一加_...` becomes `mtp://xn--...`), which gvfs
+/// backends cannot match to their device names (the location then never resolves).
 pub fn sanitize_uri_credentials(
     input: &str,
 ) -> Result<(String, Option<UriCredentials>), LocationValidationError> {
     let uri = glib::Uri::parse(input, GIO_URI_PARSE_FLAGS)
         .map_err(|_| LocationValidationError::InvalidUri)?;
     if !uri_contains_credentials(&uri) {
-        return Ok((uri.to_str().to_string(), None));
+        return Ok((to_str_preserving_host(input, &uri), None));
     }
 
     let mut username = uri.user().map(|user| user.to_string()).unwrap_or_default();
@@ -378,7 +430,7 @@ pub fn sanitize_uri_credentials(
             .map(str::to_owned);
     }
 
-    let sanitized = glib::Uri::build_with_user(
+    let rebuilt = glib::Uri::build_with_user(
         GIO_URI_BUILD_FLAGS,
         &uri.scheme(),
         (!username.is_empty()).then_some(username.as_str()),
@@ -389,9 +441,8 @@ pub fn sanitize_uri_credentials(
         &uri.path(),
         uri.query().as_deref(),
         uri.fragment().as_deref(),
-    )
-    .to_str()
-    .to_string();
+    );
+    let sanitized = to_str_preserving_host(input, &rebuilt);
     let credentials = UriCredentials {
         username,
         password: password.unwrap_or_default(),

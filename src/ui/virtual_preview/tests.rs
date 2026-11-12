@@ -18,55 +18,119 @@ use crate::{
         DocumentLayout, DocumentSpan, DocumentSpanStyle, DocumentTableCellLayout, DocumentUnit,
         DocumentUnitKind,
     },
-    test_support::gtk_test,
+    test_support::{gtk_test, wait_for_paint},
 };
+
+fn paint_frame(list: &gtk::ListView) {
+    let context = gtk::glib::MainContext::default();
+    while context.pending() {
+        context.iteration(false);
+    }
+    let clock = list.frame_clock().expect("mapped list frame clock");
+    assert!(
+        wait_for_paint(&clock),
+        "the document list did not paint a frame"
+    );
+}
+
+fn mapped_rows(list: &gtk::ListView, state: &VirtualPreviewState) -> Vec<(usize, i32, i32, bool)> {
+    let mut rows = state
+        .bound
+        .borrow()
+        .iter()
+        .filter_map(|(index, bound)| {
+            let bounds = bound.mapped_root()?.compute_bounds(list)?;
+            Some((
+                *index,
+                bounds.y().round() as i32,
+                bounds.height().round() as i32,
+                bound.materialized,
+            ))
+        })
+        .collect::<Vec<_>>();
+    rows.sort_unstable_by_key(|(index, ..)| *index);
+    rows
+}
+
+/// Paints frames until rows stop moving. A row is first painted at GTK's
+/// estimated text height and grows once its text layout is validated, which a
+/// loaded machine defers by frames; sampling before then reads a transient layout.
+/// With `paint_frame`, each frame first runs all ready work, so two equal painted frames are settled.
+fn settle_layout(
+    list: &gtk::ListView,
+    state: &VirtualPreviewState,
+    scroll: &gtk::ScrolledWindow,
+    paint: impl Fn(),
+) {
+    let layout = || {
+        let adjustment = scroll.vadjustment();
+        (
+            mapped_rows(list, state),
+            adjustment.value().to_bits(),
+            adjustment.upper().to_bits(),
+        )
+    };
+    let mut previous = None;
+    for _ in 0..600 {
+        paint();
+        let current = layout();
+        if previous.as_ref() == Some(&current) {
+            return;
+        }
+        previous = Some(current);
+    }
+    panic!("the document layout did not settle: {previous:?}");
+}
+
+fn paint_until(list: &gtk::ListView, frames: usize, reached: impl Fn() -> bool) -> bool {
+    for _ in 0..frames {
+        if reached() {
+            return true;
+        }
+        paint_frame(list);
+    }
+    reached()
+}
+
+/// Alternating one-line and long linked paragraphs, as plain text and as laid out Markdown.
+fn scroll_fixture() -> (String, DocumentLayout) {
+    let content = (0..400)
+        .map(|index| {
+            if index % 2 == 0 {
+                format!("Short paragraph {index}.")
+            } else {
+                (0..10 + (index * 37) % 150)
+                    .map(|word| format!("paragraph-{index}-word-{word}"))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    let cancellation = crate::sandbox::Cancellation::default();
+    let kind =
+        crate::services::document_kind("text/markdown", std::ffi::OsStr::new("scroll.md"), true)
+            .expect("Markdown");
+    let markdown = content
+        .split("\n\n")
+        .enumerate()
+        .map(|(index, text)| format!("[{text}](https://example.test/{index})"))
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    let parsed =
+        crate::services::parse_document(kind, &markdown, &cancellation).expect("scroll fixture");
+    let layout =
+        crate::services::layout_document(parsed.document, &cancellation).expect("scroll layout");
+    (content, layout)
+}
 
 #[test]
 fn smooth_content_scrolling_keeps_thumb_and_hit_testing_in_document_order() {
     gtk_test(
         "ui::virtual_preview::tests::smooth_content_scrolling_keeps_thumb_and_hit_testing_in_document_order",
         || {
-            let context = gtk::glib::MainContext::default();
-            let advance_frames = |duration| {
-                let deadline = std::time::Instant::now() + duration;
-                while std::time::Instant::now() < deadline {
-                    while context.pending() {
-                        context.iteration(false);
-                    }
-                    std::thread::sleep(std::time::Duration::from_millis(1));
-                }
-            };
             let _themes = crate::ui::theme::ThemeManager::shared();
-            let content = (0..400)
-                .map(|index| {
-                    if index % 2 == 0 {
-                        format!("Short paragraph {index}.")
-                    } else {
-                        (0..10 + (index * 37) % 150)
-                            .map(|word| format!("paragraph-{index}-word-{word}"))
-                            .collect::<Vec<_>>()
-                            .join(" ")
-                    }
-                })
-                .collect::<Vec<_>>()
-                .join("\n\n");
-            let cancellation = crate::sandbox::Cancellation::default();
-            let kind = crate::services::document_kind(
-                "text/markdown",
-                std::ffi::OsStr::new("scroll.md"),
-                true,
-            )
-            .expect("Markdown");
-            let markdown = content
-                .split("\n\n")
-                .enumerate()
-                .map(|(index, text)| format!("[{text}](https://example.test/{index})"))
-                .collect::<Vec<_>>()
-                .join("\n\n");
-            let parsed = crate::services::parse_document(kind, &markdown, &cancellation)
-                .expect("scroll fixture");
-            let layout = crate::services::layout_document(parsed.document, &cancellation)
-                .expect("scroll layout");
+            let (content, layout) = scroll_fixture();
             let previews = [
                 rendered_document(layout, Vec::new(), true, None),
                 source_document(&content, false, true),
@@ -78,12 +142,13 @@ fn smooth_content_scrolling_keeps_thumb_and_hit_testing_in_document_order() {
                     .child(&root)
                     .build();
                 window.present();
-                advance_frames(std::time::Duration::from_millis(300));
                 let list = state.list.upgrade().expect("document list");
                 let scroll = list
                     .ancestor(gtk::ScrolledWindow::static_type())
                     .and_downcast::<gtk::ScrolledWindow>()
                     .expect("document scroller");
+                let settle = || settle_layout(&list, &state, &scroll, || paint_frame(&list));
+                settle();
                 let controllers = scroll
                     .observe_controllers()
                     .iter::<gtk::glib::Object>()
@@ -146,15 +211,16 @@ fn smooth_content_scrolling_keeps_thumb_and_hit_testing_in_document_order() {
                 };
                 phase("scroll-begin");
                 scroll_by(0.25);
-                advance_frames(std::time::Duration::from_millis(300));
+                settle();
                 let before_momentum = scroll.vadjustment().value();
                 capture.emit_by_name::<()>("decelerate", &[&0.0_f64, &0.35_f64]);
                 phase("scroll-end");
-                advance_frames(std::time::Duration::from_millis(400));
+                let momentum_advanced = || scroll.vadjustment().value() > before_momentum;
                 assert!(
-                    scroll.vadjustment().value() > before_momentum,
+                    paint_until(&list, 120, momentum_advanced),
                     "native momentum must still advance a settled viewport in mode {mode}"
                 );
+                settle();
                 phase("scroll-begin");
                 let mut previous_progress = thumb_progress();
                 let mut previous = point().expect("initial document text");
@@ -164,7 +230,7 @@ fn smooth_content_scrolling_keeps_thumb_and_hit_testing_in_document_order() {
                     for _ in 0..if step % 40 == 0 { 16 } else { 1 } {
                         scroll_by(0.75);
                     }
-                    advance_frames(std::time::Duration::from_millis(20));
+                    settle();
                     let progress = thumb_progress();
                     assert!(
                         progress + 1e-6 >= previous_progress,
@@ -212,7 +278,7 @@ fn smooth_content_scrolling_keeps_thumb_and_hit_testing_in_document_order() {
                 capture.emit_by_name::<()>("decelerate", &[&0.0_f64, &0.35_f64]);
                 phase("scroll-end");
                 for _ in 0..60 {
-                    advance_frames(std::time::Duration::from_millis(20));
+                    paint_frame(&list);
                     let progress = thumb_progress();
                     assert!(
                         progress + 1e-6 >= previous_progress,
@@ -220,7 +286,7 @@ fn smooth_content_scrolling_keeps_thumb_and_hit_testing_in_document_order() {
                     );
                     previous_progress = progress;
                 }
-                advance_frames(std::time::Duration::from_millis(300));
+                settle();
                 assert!(
                     samples > 100,
                     "scrolling must exercise actual document text"
@@ -230,7 +296,10 @@ fn smooth_content_scrolling_keeps_thumb_and_hit_testing_in_document_order() {
                     "smooth input must advance document text"
                 );
                 let stopped = point();
-                advance_frames(std::time::Duration::from_millis(300));
+                for _ in 0..20 {
+                    paint_frame(&list);
+                }
+                settle();
                 assert_eq!(
                     point(),
                     stopped,
@@ -240,7 +309,7 @@ fn smooth_content_scrolling_keeps_thumb_and_hit_testing_in_document_order() {
                 previous_progress = thumb_progress();
                 for _ in 0..120 {
                     scroll_by(-0.75);
-                    advance_frames(std::time::Duration::from_millis(20));
+                    paint_frame(&list);
                     let progress = thumb_progress();
                     assert!(
                         progress <= previous_progress + 1e-6,
@@ -251,6 +320,72 @@ fn smooth_content_scrolling_keeps_thumb_and_hit_testing_in_document_order() {
                 phase("scroll-end");
                 window.close();
             }
+        },
+    );
+}
+
+#[test]
+fn rows_scrolled_into_view_do_not_move_when_idle_work_finally_runs() {
+    gtk_test(
+        "ui::virtual_preview::tests::rows_scrolled_into_view_do_not_move_when_idle_work_finally_runs",
+        || {
+            let _themes = crate::ui::theme::ThemeManager::shared();
+            let (_, layout) = scroll_fixture();
+            let (root, state) = rendered_document(layout, Vec::new(), true, None);
+            let window = gtk::Window::builder()
+                .default_width(480)
+                .default_height(500)
+                .child(&root)
+                .build();
+            window.present();
+            let list = state.list.upgrade().expect("document list");
+            let scroll = list
+                .ancestor(gtk::ScrolledWindow::static_type())
+                .and_downcast::<gtk::ScrolledWindow>()
+                .expect("document scroller");
+            settle_layout(&list, &state, &scroll, || paint_frame(&list));
+            let adjustment = scroll.vadjustment();
+            let clock = list.frame_clock().expect("mapped list frame clock");
+            let visible_text = || {
+                [0.15, 0.3, 0.45, 0.6, 0.75, 0.9]
+                    .map(|fraction| {
+                        super::link_point_at(
+                            &list,
+                            &state,
+                            f64::from(list.width()) / 4.0,
+                            f64::from(list.height()) * fraction,
+                        )
+                    })
+                    .to_vec()
+            };
+
+            for jump in [3000.0, 2500.0, 3500.0] {
+                // Idle callbacks sit below the redraw priority, so a loaded machine paints
+                // frames before they run. A source between the two keeps them waiting.
+                let starve = gtk::glib::idle_add_local_full(gtk::glib::Priority::from(150), || {
+                    gtk::glib::ControlFlow::Continue
+                });
+                adjustment.set_value(adjustment.value() + jump);
+                // paint_frame drains every ready source and would spin on `starve`.
+                settle_layout(&list, &state, &scroll, || {
+                    assert!(wait_for_paint(&clock), "the document list did not paint");
+                });
+                let before = visible_text();
+                assert!(
+                    before.iter().any(Option::is_some),
+                    "the jump must land on document text"
+                );
+                starve.remove();
+                for _ in 0..10 {
+                    paint_frame(&list);
+                }
+                assert_eq!(
+                    visible_text(),
+                    before,
+                    "the text moved once the idle work ran after a {jump} px jump"
+                );
+            }
+            window.close();
         },
     );
 }

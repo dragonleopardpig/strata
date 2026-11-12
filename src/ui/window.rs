@@ -19,6 +19,7 @@ mod device_actions;
 mod device_labels;
 mod device_lock;
 mod device_menu;
+mod device_order;
 mod device_release;
 pub(crate) use device_release::refresh_sidebars;
 mod devices;
@@ -98,7 +99,7 @@ pub(super) use sidebar_view::SidebarView;
 use sidebar_width::animate_sidebar;
 pub(super) use sidebar_width::{
     MIN_SIDEBAR_WIDTH, SIDEBAR_WIDTH, bind_sidebar_text_size, preferred_sidebar_width,
-    sidebar_rail_width,
+    sidebar_rail_width, sidebar_split,
 };
 pub(in crate::ui) use sidebar_width::{RailPolicy, SidebarFit, sidebar_fits_without_preview};
 pub use unlock_argument::{UnlockTarget, present_unlock};

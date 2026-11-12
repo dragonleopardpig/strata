@@ -17,11 +17,13 @@ use super::{
     device_labels,
     device_lock::{eject_password_drive, lock_encrypted_mount, lock_encrypted_volume},
     device_menu::{DeviceMenuEntries, attach_device_menu},
+    device_order::group_by_drive,
     device_release,
     drive_dialogs::PropertiesTarget,
     gio_devices::{
         gio_mount_is_encrypted, gio_volume_is_encrypted, gio_volume_is_locked,
-        gio_volume_unix_device, orphaned_password_drives,
+        gio_volume_is_system_held, gio_volume_unix_device, mount_placement,
+        orphaned_password_drives, password_drive_placement, volume_placement,
     },
     launch::navigate_to_gio_file,
     sidebar,
@@ -35,13 +37,25 @@ use super::{
 
 type DeviceAction = Rc<dyn Fn()>;
 
+enum DeviceRow {
+    Volume(gio::Volume),
+    PasswordDrive(gio::Drive),
+    Mount(String, Location, gio::Mount),
+}
+
 impl SidebarState {
     pub(super) fn append_devices(self: &Rc<Self>) {
         let volumes = self.volume_monitor.volumes();
         let mounts = self.mounts_without_volumes(&volumes);
         let password_drives =
             orphaned_password_drives(&volumes, &self.volume_monitor.connected_drives());
-        let listed = 1 + volumes.len() + mounts.len() + password_drives.len();
+        let listed = 1
+            + volumes
+                .iter()
+                .filter(|volume| !self.hides_volume(volume))
+                .count()
+            + mounts.len()
+            + password_drives.len();
         if listed == 0 && !device_release::any_pending() {
             return;
         }
@@ -63,21 +77,17 @@ impl SidebarState {
             self.append_root_device();
         }
         let mut shown = Vec::new();
-        shown.extend(
-            volumes
-                .into_iter()
-                .filter_map(|volume| self.append_volume(volume)),
-        );
-        shown.extend(
-            password_drives
-                .into_iter()
-                .filter_map(|drive| self.append_password_drive(drive)),
-        );
-        shown.extend(
-            mounts
-                .into_iter()
-                .filter_map(|(name, location, mount)| self.append_mount(&name, location, mount)),
-        );
+        let groups = self.device_row_groups(volumes, password_drives, mounts);
+        for (index, group) in groups.into_iter().enumerate() {
+            if index > 0 {
+                self.append_drive_separator();
+            }
+            shown.extend(
+                group
+                    .into_iter()
+                    .filter_map(|row| self.append_device_row(row)),
+            );
+        }
         for key in device_release::unmatched_pending(&shown) {
             self.append_release_ghost(&key);
         }
@@ -106,19 +116,43 @@ impl SidebarState {
         self.append_sidebar_row(&row);
     }
 
+    fn device_row_groups(
+        &self,
+        volumes: Vec<gio::Volume>,
+        password_drives: Vec<gio::Drive>,
+        mounts: Vec<(String, Location, gio::Mount)>,
+    ) -> Vec<Vec<DeviceRow>> {
+        let volumes = volumes
+            .into_iter()
+            .filter(|volume| !self.hides_volume(volume))
+            .map(|volume| (volume_placement(&volume), DeviceRow::Volume(volume)));
+        let drives = password_drives.into_iter().map(|drive| {
+            (
+                password_drive_placement(&drive),
+                DeviceRow::PasswordDrive(drive),
+            )
+        });
+        let mounts = mounts.into_iter().map(|(name, location, mount)| {
+            let placement = mount_placement(&mount, is_network_share(&location));
+            (placement, DeviceRow::Mount(name, location, mount))
+        });
+        group_by_drive(volumes.chain(drives).chain(mounts).collect())
+    }
+
+    fn append_device_row(self: &Rc<Self>, row: DeviceRow) -> Option<device_release::DeviceIds> {
+        match row {
+            DeviceRow::Volume(volume) => Some(self.append_volume(volume)),
+            DeviceRow::PasswordDrive(drive) => self.append_password_drive(drive),
+            DeviceRow::Mount(name, location, mount) => self.append_mount(&name, location, mount),
+        }
+    }
+
     pub(super) fn mounts_without_volumes(
         &self,
         volumes: &[gio::Volume],
     ) -> Vec<(String, Location, gio::Mount)> {
-        self.volume_monitor
-            .mounts()
+        super::devices::mounts_without_listed_volumes(&self.volume_monitor, volumes)
             .into_iter()
-            .filter(|mount| !mount.is_shadowed())
-            .filter(|mount| {
-                !mount
-                    .volume()
-                    .is_some_and(|volume| volumes.contains(&volume))
-            })
             .filter_map(|mount| {
                 let name = mount.name().to_string();
                 let location = location_for_file(&mount.root())?;
@@ -205,10 +239,7 @@ impl SidebarState {
         }
     }
 
-    pub(super) fn append_volume(
-        self: &Rc<Self>,
-        volume: gio::Volume,
-    ) -> Option<device_release::DeviceIds> {
+    fn append_volume(self: &Rc<Self>, volume: gio::Volume) -> device_release::DeviceIds {
         let name = volume.name().to_string();
         let mounted_location = volume
             .get_mount()
@@ -222,20 +253,14 @@ impl SidebarState {
         if let Some(id) = PropertiesTarget::Volume(volume.clone()).label_id() {
             device_labels::bind_row_label(&row, &self.preference_manager, &id, &name);
         }
-        let mounted_location = volume
-            .get_mount()
-            .as_ref()
-            .and_then(|mount| location_for_file(&mount.root()));
+        let mounted_location = mounted_volume_location(&volume);
         crate::ui::accessibility::set_description(
             &row,
             volume_description(&volume, mounted_location.as_ref()).as_deref(),
         );
-        if self.hides_volume(&volume, mounted_location.as_ref()) {
-            return None;
-        }
         let ids = device_release::ids_for_volume(&volume);
         if self.append_if_releasing(&row, &ids) {
-            return Some(ids);
+            return ids;
         }
         if let Some(location) = mounted_location {
             self.install_mounted_volume_row(&row, location);
@@ -243,15 +268,18 @@ impl SidebarState {
         self.connect_volume_click(&row, &volume);
         let entries = self.volume_menu_entries(volume);
         self.append_device_chrome(&row, entries);
-        Some(ids)
+        ids
     }
 
     /// A local-only sidebar lists only volumes that are, or would mount as, local paths.
-    fn hides_volume(&self, volume: &gio::Volume, mounted_location: Option<&Location>) -> bool {
+    fn hides_volume(&self, volume: &gio::Volume) -> bool {
+        if gio_volume_is_system_held(volume) {
+            return true;
+        }
         if !self.local_only {
             return false;
         }
-        match mounted_location {
+        match mounted_volume_location(volume) {
             Some(location) => location.native_path().is_none(),
             None => {
                 gio_volume_unix_device(volume).is_none()
@@ -481,6 +509,13 @@ impl SidebarState {
     }
 }
 
+fn mounted_volume_location(volume: &gio::Volume) -> Option<Location> {
+    volume
+        .get_mount()
+        .as_ref()
+        .and_then(|mount| location_for_file(&mount.root()))
+}
+
 /// Like a mount row, a volume row is described by its path: where it is mounted,
 /// else its device.
 fn volume_description(volume: &gio::Volume, mounted: Option<&Location>) -> Option<String> {
@@ -655,15 +690,30 @@ mod tests {
                     Some((1000 * 1000 * 1000, 250 * 1000 * 1000)),
                 );
                 assert!(button.has_css_class("sidebar-device-button"));
-                let content = button.child().and_downcast::<gtk::Box>().expect("content box");
-                let text_box = content.last_child().and_downcast::<gtk::Box>().expect("text box");
+                let content = button
+                    .child()
+                    .and_downcast::<gtk::Box>()
+                    .expect("content box");
+                let text_box = content
+                    .last_child()
+                    .and_downcast::<gtk::Box>()
+                    .expect("text box");
                 assert!(text_box.has_css_class("sidebar-device-text"));
-                let name = text_box.first_child().and_downcast::<gtk::Label>().expect("name label");
+                let name = text_box
+                    .first_child()
+                    .and_downcast::<gtk::Label>()
+                    .expect("name label");
                 assert_eq!(name.text(), "Local Disk");
-                let progress = name.next_sibling().and_downcast::<gtk::ProgressBar>().expect("progress bar");
+                let progress = name
+                    .next_sibling()
+                    .and_downcast::<gtk::ProgressBar>()
+                    .expect("progress bar");
                 assert!(progress.has_css_class("sidebar-capacity-progress"));
                 assert!((progress.fraction() - 0.75).abs() < 0.01);
-                let capacity = progress.next_sibling().and_downcast::<gtk::Label>().expect("capacity label");
+                let capacity = progress
+                    .next_sibling()
+                    .and_downcast::<gtk::Label>()
+                    .expect("capacity label");
                 assert!(capacity.has_css_class("sidebar-device-capacity"));
                 assert!(capacity.text().contains("free of"));
             },

@@ -65,21 +65,23 @@ outgrows the window; selecting a tab brings it into view without a scrollbar.
 Drag a tab label to reorder tabs; an accent-colored insertion line shows where
 it will land. Sidebar locations offer **Open in New Tab** in their context menu
 and open in a new tab on middle-click, as do the folders in the path bar.
-Dragging a sidebar location or folders
-from a file view marks on the strip where new tabs will open; drop there to
-create tabs at that position. **+** also accepts these drags, and is the drop
-target when a single tab leaves the strip hidden. Escape cancels the drag.
-Folder-only drags from a file view open tabs even over an existing tab header;
-they never move or copy the folders into that tab. Opening sidebar locations
-also leaves files and sidebar pins unchanged. These tab actions are not offered
-in file choosers.
+Dragging a sidebar location marks on the strip where a new tab will open;
+drop there to create a tab at that position. Folders dragged from a file view
+open in new tabs when dropped onto unused tab-bar space or **+**, not onto an
+existing tab. **+** also accepts sidebar drags and is the drop target when a
+single tab leaves the strip hidden. Opening folders in new tabs leaves their
+files and sidebar pins unchanged. These tab actions are not offered in file
+choosers.
 
-Drop files (or a mixed selection of files and folders) from a listing on a tab
-to transfer into its current directory, or hover there during a file drag to
-switch tabs and choose a folder in its listing. Existing copy/move modifiers
-and conflict handling apply. Escape cancels a file drag before it dismisses
-anything else: nothing transfers on release, and the selection, preview, and
-filter stay as they were.
+Drop files or folders from a listing onto an existing tab to transfer them into
+its current directory, or hover there during the drag to switch tabs and choose
+a folder in its listing. Files, folders, and mixed selections use the same
+transfer behavior. Existing copy/move modifiers, conflict handling, and undo
+apply. Escape cancels a drag before it dismisses anything else: nothing transfers
+on release, and the selection, preview, and filter stay as they were.
+On X11, Escape may not cancel after a drag hover switches tabs
+([#2091](https://github.com/lgse/strata/issues/2091)); move away from drop targets
+before releasing if cancellation does not end the drag.
 
 ## Extra pane
 
@@ -149,8 +151,9 @@ listing, as on a first visit.
 
 In Columns, Back, Forward, Up and breadcrumbs that return to an ancestor of the
 current directory select the folder you came from, with the cursor on it, and leave
-its column closed. When that folder is gone or hidden, the first visible entry is
-selected instead; hidden files stay hidden. Icons and List do the same when they
+its column closed. When that folder is gone or hidden, the first row shown is
+selected instead (in a List grouped by file type, the first item of the first
+group); hidden files stay hidden. Icons and List do the same when they
 have no remembered position for the ancestor. After Back, Left into an ancestor
 column puts the cursor on the folder it has open, or on it once the column finishes
 loading, so F2, Delete and copy act on that folder; if the folder is gone by then,
@@ -270,6 +273,15 @@ a wildcard does not enable recursive search. Existing result limits still apply.
 Clear the input, or press Escape in the input or on a focused result, to restore
 the directory listing with focus on its cursor. **Ctrl+K** global fuzzy search is
 unchanged.
+
+While the **Ctrl+F** input is focused, **/** enters the first displayed result if
+it is a folder, clears the query, and keeps the filter focused in that folder.
+This works in Columns, List, Icons, and the file chooser, including results from
+**Include subfolders**. Files, no matches, and empty queries leave the input and
+location unchanged. A pending query waits for a match or indexing to finish, and
+a folder that is still listing waits until a folder matches first or the listing
+ends; editing the query, leaving the input, or dismissing it cancels pending
+navigation. The normal filename matching rules stay the same.
 
 Results follow the watched folders live: the open folder, and in Columns every open
 column. A matching file that another program creates or renames there appears within
@@ -445,11 +457,11 @@ An empty, unreadable or still-loading directory has no rows to focus, so the pan
 
 **Settings → General → Browsing → Keep arrows in file list** (off by default) stops arrow keys from leaving the file list. Use **Ctrl+Shift+B** to focus the sidebar, or use the mouse. **Ctrl+\\** toggles it live. The file chooser respects the same preference.
 
-**Alt+Left / Alt+Right / Alt+Up** remain Back / Forward / Parent in every mode. In the default map, List/Columns retain Miller-column navigation: **Right enters folders or moves into an existing pane to the right**. On a focused file with no pane to the right, Right does nothing; it never opens or previews the file. **Enter** opens files. With **Type to search** off, `h` / `j` / `k` / `l` act as the arrow keys in every view, and Backspace still goes up a level. In [10xer mode](10xer-mode.md), arrows stay in the Columns, List, and Icons panes. **Tab** moves from the file list to the window header, where **Enter** / **Space** activate the focused control and **h** / **j** return to the files. **Ctrl+Shift+B** focuses a visible sidebar; a hidden sidebar stays hidden until the header toggle shows it. In the sidebar, **j** / **k** and **Up** / **Down** move between places and device controls, **l** / **Enter** / **Space** activate the focused one, and **h** / **Left** / **Backspace** return to the files without changing the selection. A **Tab** or arrow key from the footer still returns to the file list. List and Columns **l** / **→** open a directory or enter a file's preview when possible. Icons **h** / **j** / **k** / **l** and arrows always move to the next icon in that direction, including across search-result icons; they never preview or change location. Compact keys move the same way, along and across its columns. On a file, **i** toggles the preview without moving focus. On a directory it opens the next Miller column without focusing it, or toggles the folder-peek popover in List and Icons.
+**Alt+Left / Alt+Right / Alt+Up** remain Back / Forward / Parent in every mode. In Columns, **Alt+Down** makes the focused column the first one: the columns to its left close, the columns to its right stay open, and the focus, the cursor and any multi-selection stay on the same items. It is a history step, so Back restores the whole strip. In the first column, in Icons, List, Compact and 10xer mode, and in file choosers, it does nothing. In the default map, List/Columns retain Miller-column navigation: **Right enters folders or moves into an existing pane to the right**. On a focused file with no pane to the right, Right does nothing; it never opens or previews the file. **Enter** opens files. With **Type to search** off, `h` / `j` / `k` / `l` act as the arrow keys in every view, and Backspace still goes up a level. In [10xer mode](10xer-mode.md), arrows stay in the Columns, List, and Icons panes. **Tab** moves from the file list to the window header, where **Enter** / **Space** activate the focused control and **h** / **j** return to the files. **Ctrl+Shift+B** focuses a visible sidebar; a hidden sidebar stays hidden until the header toggle shows it. In the sidebar, **j** / **k** and **Up** / **Down** move between places and device controls, **l** / **Enter** / **Space** activate the focused one, and **h** / **Left** / **Backspace** return to the files without changing the selection. A **Tab** or arrow key from the footer still returns to the file list. List and Columns **l** / **→** open a directory or enter a file's preview when possible. Icons **h** / **j** / **k** / **l** and arrows always move to the next icon in that direction, including across search-result icons; they never preview or change location. Compact keys move the same way, along and across its columns. On a file, **i** toggles the preview without moving focus. On a directory it opens the next Miller column without focusing it, or toggles the folder-peek popover in List and Icons.
 
 Columns reserves preview space from startup, even before a file is previewed. **Space**, **i**, and the preview's close button dismiss the content without reclaiming that space, so opening or closing a preview does not move the columns under the pointer. Switch **Appearance → Preview panel** off to explicitly reclaim it. This reservation is window-local and does not enable automatic previews on its own. In narrow windows the preview content hides, but the reserved slot keeps the remaining width beside the focused column, down to zero. The complete sizing, reservation, and dismissal rules are in [Preview panel and column layout](preview-panel-layout.md).
 
-In Columns, the pane to the right mirrors keyboard selection like Finder: moving with **Up/Down**, **Page Up/Page Down**, **Home/End** or **Ctrl+Up/Ctrl+Down** onto a folder shows its contents in a child column that takes the reserved preview space, onto a previewable file closes that child column and opens Quick Preview in the same space, and onto any other file closes the child pane. The focused column stays where it is throughout. The breadcrumbs and **Ctrl+L** name the deepest open column; after a switch to List or Icons they name the folder that view shows. Shift-extended ranges do not mirror. A preview closed with **Space**, **i**, **Esc**, the close button, or **Appearance → Preview panel** stays closed while mirroring until it is opened explicitly again. Pointer selection keeps the configured click behavior. A plain click on a file ends the open path at its column, closing deeper columns, whether or not the file previews; a press that turns into a drag does not. Clicking a folder whose column is already open focuses that column rather than closing it, and a double-click ends exactly where a single-click open does; a slow click on a selected folder's name still renames it. In every view, a plain click on an item that is part of a multi-selection collapses the selection to that item and then applies its single-click behavior: a folder set to open on one click opens (in Columns, as its child column), and a previewable file is previewed when **Single-click previews** is on. Pressing a member and dragging still drags the whole selection. **Settings → General → Browsing → Mirror columns selection** (on by default) toggles the mirroring. 10xer mode follows the same preference for its cursor in Columns; see [10xer mode](10xer-mode.md). **l** / **→** enters a directory or a file preview, and **i** toggles a file's preview or opens the next column / toggles folder peek for a directory.
+In Columns, the pane to the right mirrors keyboard selection like Finder: moving with **Up/Down**, **Page Up/Page Down**, **Home/End** or **Ctrl+Up/Ctrl+Down** onto a folder shows its contents in a child column that takes the reserved preview space, onto a previewable file closes that child column and opens Quick Preview in the same space, and onto any other file closes the child pane. The focused column stays where it is throughout. The breadcrumbs and **Ctrl+L** name the deepest open column; after a switch to List or Icons they name the folder that view shows. On the switch back to Columns, the child column follows the selection that view left: an empty selection opens no child column, and with mirroring on, a single selected folder opens as the child column without taking focus. Shift-extended ranges do not mirror. A preview closed with **Space**, **i**, **Esc**, the close button, or **Appearance → Preview panel** stays closed while mirroring until it is opened explicitly again. Pointer selection keeps the configured click behavior. A plain click on a file ends the open path at its column, closing deeper columns, whether or not the file previews; a press that turns into a drag does not. Clicking a folder whose column is already open focuses that column rather than closing it, and a double-click ends exactly where a single-click open does; a slow click on a selected folder's name still renames it. In every view, a plain click on an item that is part of a multi-selection collapses the selection to that item and then applies its single-click behavior: a folder set to open on one click opens (in Columns, as its child column), and a previewable file is previewed when **Single-click previews** is on. Pressing a member and dragging still drags the whole selection. **Settings → General → Browsing → Mirror columns selection** (on by default) toggles the mirroring. 10xer mode follows the same preference for its cursor in Columns; see [10xer mode](10xer-mode.md). **l** / **→** enters a directory or a file preview, and **i** toggles a file's preview or opens the next column / toggles folder peek for a directory.
 
 Switching views with **Ctrl+1**, **Ctrl+2**, **Ctrl+3**, or **Ctrl+4** (Compact) keeps keyboard focus in the visible tab. Hidden tabs follow the saved view preference without taking focus. A newer keyboard navigation action supersedes any queued cursor-focus restoration.
 

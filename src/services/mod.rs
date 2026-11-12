@@ -15,6 +15,7 @@ mod install_source;
 pub(crate) mod integration_catalog;
 mod item_identity;
 pub(crate) mod jobs;
+pub(crate) mod letter_bookmarks;
 mod listeners;
 mod mime_type;
 pub(crate) mod model_preview;
@@ -57,8 +58,8 @@ pub use file_source::{
 };
 pub(crate) use file_source::{
     INVALID_NAME_REASON, UNEXPECTED_SYSTEM_ERROR, describes_refused_credentials, error_detail,
-    gio_backend_error_message, gio_error_detail, gio_error_message, io_error_detail,
-    io_error_message, sanitize_failure_message, system_error_text,
+    gio_backend_error_message, gio_device_error_message, gio_error_detail, gio_error_message,
+    io_error_detail, io_error_message, sanitize_failure_message, system_error_text,
 };
 pub use install_source::{InstallSource, ManagedInstall};
 pub(crate) use install_source::{ensure_self_managed, installed_executable};
@@ -95,9 +96,10 @@ pub use preview::{
 pub(crate) use preview::{
     INCORRECT_ARCHIVE_PASSWORD, archive_preview_format, bytes_support_named_family, content_family,
     guess_content_type, has_plain_text_extension, is_extensionless_dotfile, is_image_path,
-    is_media_path, is_model, is_non_executable_extensionless_dotfile, looks_like_text,
-    model_format, normalize_preview_text, read_head_sample, read_supports_named_family,
-    reconcile_with_sample, refine_reported_content_type, split_archive_name, supports_remote_video,
+    is_media_path, is_model, is_non_executable_extensionless_dotfile, is_raw_video_stream,
+    looks_like_text, model_format, normalize_preview_text, read_head_sample,
+    read_supports_named_family, reconcile_with_sample, refine_reported_content_type,
+    split_archive_name, supports_remote_video,
 };
 pub(crate) use transfer_action::{
     CrossVolumeDropStrategy, DropActionInput, DropCommit, DropOverride, TransferKind,
