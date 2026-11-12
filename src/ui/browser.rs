@@ -227,6 +227,7 @@ pub(super) struct ViewState {
     context_menu_column: Cell<Option<usize>>,
     context_menu_generation: Cell<u64>,
     context_menu_focus: RefCell<Option<glib::WeakRef<gtk::Widget>>>,
+    pub(in crate::ui) active_context_popover: RefCell<Option<glib::WeakRef<gtk::Popover>>>,
     input_ownership: RefCell<super::input_ownership::InputOwnership>,
     /// True only while a column row gesture is writing the selection model.
     /// Focus echoes of the cursor are not pointer-owned.

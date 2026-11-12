@@ -6178,6 +6178,16 @@ menubutton.icons-thumbnail-menu > button:focus-visible {
   padding: 1px 6px;
 }
 
+.mode-compact .compact-card .icons-card-details {
+  padding: 0 6px;
+  font-size: 0.78em;
+}
+
+.mode-compact .compact-card .icons-card-progress {
+  margin-left: 6px;
+  margin-right: 6px;
+}
+
 .mode-compact.density-airy .compact-card {
   padding: 3px 4px;
 }

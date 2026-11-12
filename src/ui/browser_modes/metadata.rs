@@ -25,6 +25,9 @@ pub(super) fn metadata_fill_position(
     include_mode: bool,
     include_icon_details: bool,
 ) -> Option<usize> {
+    if entry.is_computer_item() {
+        return None;
+    }
     position.filter(|_| {
         let mode_unknown = include_mode && entry.mode == MetadataValue::Unknown;
         let details_unknown = include_icon_details && icon_details_need_fill(entry);
@@ -36,6 +39,9 @@ pub(super) fn metadata_fill_position(
 }
 
 pub(in crate::ui) fn icon_details_need_fill(entry: &FileEntry) -> bool {
+    if entry.is_computer_item() {
+        return false;
+    }
     if entry.is_directory() {
         return entry.child_count == MetadataValue::Unknown;
     }
@@ -154,12 +160,20 @@ pub(super) fn set_icons_entry_details(card: &gtk::Box, entry: &FileEntry) {
             }
         } else {
             progress.set_visible(false);
+            progress.remove_css_class("danger");
+            progress.remove_css_class("warning");
         }
     }
     let Some(label) = icons_cell::details_label(card) else {
         return;
     };
-    set_label_if_changed(&label, &entry_icons_item_info(entry).unwrap_or_default());
+    let info = entry_icons_item_info(entry);
+    if entry.is_computer_item() {
+        label.set_visible(info.is_some());
+    } else if card.has_css_class("compact-card") {
+        label.set_visible(false);
+    }
+    set_label_if_changed(&label, &info.unwrap_or_default());
 }
 
 pub(super) fn update_bound_list_metadata(pane: &Pane, updates: &[(usize, FileEntry)]) {

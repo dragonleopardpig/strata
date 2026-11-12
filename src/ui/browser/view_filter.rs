@@ -146,4 +146,8 @@ impl BrowserView {
         };
         filter_button.set_active(false);
     }
+
+    pub(in crate::ui) fn close_context_menu(&self) -> bool {
+        self.state.close_context_menu()
+    }
 }

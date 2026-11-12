@@ -329,6 +329,7 @@ impl SelectionClick {
             return;
         };
         if let Some(state) = self.state.upgrade() {
+            state.close_context_menu();
             state.cancel_click_rename();
         }
         let modifiers = gesture.current_event_state();

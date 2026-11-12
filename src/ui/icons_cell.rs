@@ -130,6 +130,8 @@ pub(super) fn new_compact_card(slot: i32) -> gtk::Box {
 
     let details = gtk::Label::new(None);
     details.add_css_class("icons-card-details");
+    details.set_xalign(0.0);
+    details.set_ellipsize(gtk::pango::EllipsizeMode::End);
     details.set_visible(false);
 
     let progress = gtk::ProgressBar::new();

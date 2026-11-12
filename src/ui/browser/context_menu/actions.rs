@@ -234,6 +234,7 @@ impl ActionMenuSection {
 
     pub(super) fn show(&self, anchor: &gtk::Widget, x: f64, y: f64) {
         self.pressed_inside.set(false);
+        self.popover.set_autohide(true);
         if self.popover.parent().is_none()
             && let Some(owner) = self.owner.upgrade()
         {
@@ -522,6 +523,7 @@ struct CustomInvocation {
 
 fn base_popover(body_only: bool) -> gtk::PopoverMenu {
     let popover = nested_popover_menu();
+    popover.set_autohide(true);
     popover.set_has_arrow(false);
     popover.add_css_class("folder-context-popover");
     popover.add_css_class("actions-context-popover");

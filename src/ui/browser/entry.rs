@@ -19,6 +19,9 @@ pub(in crate::ui) fn format_file_size(bytes: u64) -> String {
 }
 
 pub(in crate::ui) fn metadata_needs_fill(entry: &FileEntry) -> bool {
+    if entry.is_computer_item() {
+        return false;
+    }
     entry.modified_unix_seconds == crate::model::MetadataValue::Unknown
         || (!entry.is_directory() && entry.size == crate::model::MetadataValue::Unknown)
         || (entry.is_directory()

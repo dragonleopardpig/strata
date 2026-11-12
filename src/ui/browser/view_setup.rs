@@ -369,6 +369,7 @@ fn new_view_state(parts: StateParts) -> Rc<ViewState> {
         context_menu_column: Cell::new(None),
         context_menu_generation: Cell::new(0),
         context_menu_focus: RefCell::new(None),
+        active_context_popover: RefCell::new(None),
         input_ownership: RefCell::new(crate::ui::input_ownership::InputOwnership::default()),
         pointer_owns_selection: Cell::new(false),
         folder_press: RefCell::new(None),
@@ -563,13 +564,38 @@ impl ViewState {
         self.browser.observe_navigation(refresh);
     }
 
-    /// Any press or key in the view cancels a pending slow-click rename.
+    /// Any press or key in the view cancels a pending slow-click rename,
+    /// and dismisses any open context menu when clicked outside it.
     fn install_click_rename_cancel(self: &Rc<Self>) {
         let click = gtk::GestureClick::new();
         click.set_button(0);
         click.set_propagation_phase(gtk::PropagationPhase::Capture);
-        let cancel = on_state(self, |state| state.cancel_click_rename());
-        click.connect_pressed(move |_, _, _, _| cancel());
+        let weak = Rc::downgrade(self);
+        click.connect_pressed(move |gesture, _, x, y| {
+            let Some(state) = weak.upgrade() else {
+                return;
+            };
+            state.cancel_click_rename();
+            if let Some(popover) = state
+                .active_context_popover
+                .borrow()
+                .as_ref()
+                .and_then(|p| p.upgrade())
+                .filter(|p| p.is_visible())
+            {
+                let on_popover = gesture
+                    .widget()
+                    .and_then(|widget| widget.pick(x, y, gtk::PickFlags::DEFAULT))
+                    .is_some_and(|target| {
+                        target == *popover.upcast_ref::<gtk::Widget>()
+                            || target.is_ancestor(&popover)
+                            || target.ancestor(gtk::Popover::static_type()).is_some()
+                    });
+                if !on_popover {
+                    popover.popdown();
+                }
+            }
+        });
         self.overlay.add_controller(click);
 
         let keys = gtk::EventControllerKey::new();

@@ -102,6 +102,45 @@ fn dropping_an_action_menu_unparents_its_popover() {
 }
 
 #[test]
+fn active_context_popover_is_dismissed_by_close_context_menu() {
+    crate::test_support::gtk_test(
+        "ui::browser::context_menu::tests::menus::active_context_popover_is_dismissed_by_close_context_menu",
+        || {
+            let fixture = tempfile::tempdir().expect("menu fixture");
+            let view = BrowserView::new(Rc::new(MenuSource), PeekBehavior::default());
+            view.set_view_mode(BrowserMode::Icons);
+            let window = gtk::Window::builder()
+                .child(&view.widget())
+                .default_width(1000)
+                .default_height(850)
+                .build();
+            window.present();
+
+            let browser = view.browser();
+            let location = Location::local(fixture.path());
+            browser.navigate(location.clone());
+            wait_until(|| {
+                browser.active_location() == Some(location.clone())
+                    && browser
+                        .column_snapshot(0)
+                        .is_some_and(|column| !column.loading)
+            });
+
+            let menu = open_menu(&view, Some("notes.txt"));
+            assert!(menu.is_visible());
+            assert!(view.state.active_context_popover.borrow().is_some());
+
+            assert!(view.state.close_context_menu());
+            wait_until(|| !menu.is_mapped());
+            assert!(view.state.active_context_popover.borrow().is_none());
+
+            browser.clear_observer();
+            window.destroy();
+        },
+    );
+}
+
+#[test]
 fn repeated_navigation_releases_context_menu_bindings() {
     crate::test_support::gtk_test(
         "ui::browser::context_menu::tests::menus::repeated_navigation_releases_context_menu_bindings",

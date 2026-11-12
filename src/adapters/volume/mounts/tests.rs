@@ -3,8 +3,8 @@
 use std::{path::Path, time::Duration};
 
 use super::{
-    FAT32_MAX_FILE_SIZE, MountKey, MountTable, MountType, holds_symlinks, is_remote_fs_type,
-    max_file_size, unescape,
+    FAT32_MAX_FILE_SIZE, MountKey, MountTable, MountType, holds_symlinks, is_local_block_in_table,
+    is_remote_fs_type, max_file_size, unescape,
 };
 use crate::adapters::volume::names::{
     NameEncoding, NameLimit, NameProfile, NameRules, PrivateUse, Reserved, Strip,
@@ -44,6 +44,18 @@ fn parses_mount_points_and_filesystem_types() {
         )),
         Some("fuse.gvfsd-fuse")
     );
+}
+
+#[test]
+fn local_block_mounts_identified_correctly() {
+    let table = MountTable::parse(SAMPLE);
+    assert!(is_local_block_in_table(&table, Path::new("/")));
+    assert!(is_local_block_in_table(&table, Path::new("/home/user/file")));
+    assert!(is_local_block_in_table(&table, Path::new("/mnt/nfs/local")));
+    assert!(!is_local_block_in_table(&table, Path::new("/mnt/nfs")));
+    assert!(!is_local_block_in_table(&table, Path::new("/mnt/nfs/docs")));
+    assert!(!is_local_block_in_table(&table, Path::new("/run/user/1000/gvfs")));
+    assert!(!is_local_block_in_table(&table, Path::new("/mnt/my share")));
 }
 
 #[test]

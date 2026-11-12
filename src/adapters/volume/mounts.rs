@@ -679,9 +679,39 @@ fn unescape(field: impl AsRef<[u8]>) -> OsString {
     OsString::from_vec(out)
 }
 
+/// Whether `path` is hosted on a local block device (such as an internal or USB disk),
+/// and is safe for synchronous capacity queries without blocking on remote I/O or
+/// userspace FUSE network daemons.
+pub(crate) fn is_local_block_filesystem(path: &Path) -> bool {
+    #[cfg(test)]
+    if path.starts_with("/tmp") || path.starts_with(std::env::temp_dir()) {
+        return true;
+    }
+    if path == Path::new("/") {
+        return true;
+    }
+    let table = super::mount_watch::latest();
+    is_local_block_in_table(&table, path)
+}
+
+pub(crate) fn is_local_block_in_table(table: &MountTable, path: &Path) -> bool {
+    if path == Path::new("/") {
+        return true;
+    }
+    if table.is_network_path(path) {
+        return false;
+    }
+    table
+        .source_for(path)
+        .is_some_and(|source| source.starts_with("/dev"))
+}
+
 /// Total and available bytes for a mounted path, or `None` when the
-/// filesystem does not report capacity.
+/// filesystem does not report capacity or is not a local block device.
 pub(crate) fn filesystem_usage(path: &Path) -> Option<(u64, u64)> {
+    if !is_local_block_filesystem(path) {
+        return None;
+    }
     let stat = rustix::fs::statvfs(path).ok()?;
     if stat.f_blocks == 0 {
         return None;

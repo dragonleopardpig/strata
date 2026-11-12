@@ -224,14 +224,16 @@ impl WindowContent {
         notice
     }
 
-    /// Clicks outside a pane's filter or location edit end them.
+    /// Clicks outside a pane's filter or location edit end them, and dismiss context menus.
     fn bind_pane_input(&self, view: &BrowserView) {
         let click_browser = view.clone();
         let click = gtk::GestureClick::new();
+        click.set_button(0);
         click.set_propagation_phase(gtk::PropagationPhase::Capture);
         click.connect_pressed(move |gesture, _, x, y| {
             if let Some(window) = gesture.widget() {
                 click_browser.dismiss_filter_on_outside_click(&window, x, y);
+                click_browser.close_context_menu();
             }
         });
         self.overlay.add_controller(click);

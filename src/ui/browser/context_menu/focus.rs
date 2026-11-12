@@ -15,6 +15,7 @@ fn context_menu_still_open_for(state: &ViewState, generation: u64, depth: usize)
 fn release_context_column(state: &ViewState) {
     state.context_menu_column.set(None);
     state.context_menu_focus.borrow_mut().take();
+    state.active_context_popover.borrow_mut().take();
     state.refresh_destination_style();
 }
 
@@ -49,11 +50,19 @@ pub(in crate::ui::browser) fn bind_column_context_owner(
     popover: &gtk::Popover,
     depth: usize,
 ) {
+    state.register_active_context_popover(popover);
     let weak = Rc::downgrade(state);
+    let weak_for_show = weak.clone();
+    popover.connect_show(move |popover| {
+        if let Some(state) = weak_for_show.upgrade() {
+            state.register_active_context_popover(popover);
+        }
+    });
     popover.connect_closed(move |popover| {
         let Some(state) = weak.upgrade() else {
             return;
         };
+        state.unregister_active_context_popover(popover);
         if state.context_menu_column.get() != Some(depth) {
             return;
         }

@@ -709,12 +709,15 @@ impl ItemMenuTrigger {
             return false;
         };
         let Some(picked) = widget.pick(x, y, gtk::PickFlags::DEFAULT) else {
+            self.menu.popdown();
             return false;
         };
         let Some(state) = self.menu.state.upgrade() else {
             return false;
         };
         let Some((position, entry)) = (self.resolve)(&picked) else {
+            self.menu.popdown();
+            state.close_context_menu();
             return false;
         };
         let depth = self.menu.depth;
