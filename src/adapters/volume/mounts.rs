@@ -4,11 +4,12 @@
 mod tests;
 
 use std::{
+    collections::{HashMap, HashSet},
     ffi::OsString,
     os::unix::ffi::OsStringExt,
     path::{Path, PathBuf},
-    sync::Arc,
-    time::Duration,
+    sync::{Arc, LazyLock, Mutex},
+    time::{Duration, Instant},
 };
 
 use super::names::{NameEncoding, NameProfile, NameRules, PrivateUse, Reserved, Strip, byte_limit};
@@ -706,12 +707,13 @@ pub(crate) fn is_local_block_in_table(table: &MountTable, path: &Path) -> bool {
         .is_some_and(|source| source.starts_with("/dev"))
 }
 
-/// Total and available bytes for a mounted path, or `None` when the
-/// filesystem does not report capacity or is not a local block device.
-pub(crate) fn filesystem_usage(path: &Path) -> Option<(u64, u64)> {
-    if !is_local_block_filesystem(path) {
-        return None;
-    }
+static USAGE_CACHE: LazyLock<Mutex<HashMap<PathBuf, (u64, u64, Instant)>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+static PENDING_PROBES: LazyLock<Mutex<HashSet<PathBuf>>> =
+    LazyLock::new(|| Mutex::new(HashSet::new()));
+
+fn raw_statvfs(path: &Path) -> Option<(u64, u64)> {
     let stat = rustix::fs::statvfs(path).ok()?;
     if stat.f_blocks == 0 {
         return None;
@@ -725,4 +727,55 @@ pub(crate) fn filesystem_usage(path: &Path) -> Option<(u64, u64)> {
         stat.f_blocks.saturating_mul(block),
         stat.f_bavail.saturating_mul(block),
     ))
+}
+
+/// Total and available bytes for a mounted path. Local block filesystems are
+/// measured immediately; remote/cloud/FUSE filesystems return cached usage or
+/// trigger a background probe without blocking the UI thread.
+pub(crate) fn filesystem_usage(path: &Path) -> Option<(u64, u64)> {
+    if is_local_block_filesystem(path) {
+        return raw_statvfs(path);
+    }
+
+    let now = Instant::now();
+    let cached = if let Ok(cache) = USAGE_CACHE.lock() {
+        if let Some(&(total, available, timestamp)) = cache.get(path) {
+            if now.duration_since(timestamp) < Duration::from_secs(60) {
+                return Some((total, available));
+            }
+            Some((total, available))
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    let should_probe = if let Ok(mut pending) = PENDING_PROBES.lock() {
+        pending.insert(path.to_path_buf())
+    } else {
+        false
+    };
+
+    if should_probe {
+        let path_buf = path.to_path_buf();
+        std::thread::spawn(move || {
+            let usage = raw_statvfs(&path_buf);
+            if let Ok(mut pending) = PENDING_PROBES.lock() {
+                pending.remove(&path_buf);
+            }
+            if let Some(usage) = usage {
+                if let Ok(mut cache) = USAGE_CACHE.lock() {
+                    cache.insert(path_buf, (usage.0, usage.1, Instant::now()));
+                }
+                glib::idle_add_once(|| {
+                    crate::ui::refresh_sidebars();
+                });
+            } else if let Ok(mut cache) = USAGE_CACHE.lock() {
+                cache.remove(&path_buf);
+            }
+        });
+    }
+
+    cached
 }

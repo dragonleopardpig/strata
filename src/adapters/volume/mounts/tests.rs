@@ -599,3 +599,17 @@ fn name_rules_follow_the_driver_its_options_and_its_name_length() {
         );
     }
 }
+
+#[test]
+fn filesystem_usage_runs_synchronously_for_local_and_asynchronously_for_non_local() {
+    let root_usage = super::filesystem_usage(Path::new("/"));
+    assert!(root_usage.is_some());
+    let (total, avail) = root_usage.unwrap();
+    assert!(total > 0);
+    assert!(avail <= total);
+
+    let remote_path = Path::new("/non_existent_or_remote_probe_test");
+    let probe_init = super::filesystem_usage(remote_path);
+    assert!(probe_init.is_none());
+}
+
