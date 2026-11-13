@@ -389,12 +389,16 @@ fn repin_once_measured(bound_items: BoundItems, grid: &gtk::GridView) {
 }
 
 fn measured_cell_height(bound_items: &BoundItems) -> Option<i32> {
-    bound_items.borrow().iter().find_map(|bound| {
-        let widget = bound.widget.upgrade()?;
-        let cell = widget.parent().unwrap_or(widget);
-        let (_, natural, _, _) = cell.measure(gtk::Orientation::Vertical, -1);
-        (natural > 0).then_some(natural)
-    })
+    bound_items
+        .borrow()
+        .iter()
+        .filter_map(|bound| {
+            let widget = bound.widget.upgrade()?;
+            let cell = widget.parent().unwrap_or(widget);
+            let (_, natural, _, _) = cell.measure(gtk::Orientation::Vertical, -1);
+            (natural > 0).then_some(natural)
+        })
+        .max()
 }
 
 /// Redraws card chrome once scrolling comes to rest.

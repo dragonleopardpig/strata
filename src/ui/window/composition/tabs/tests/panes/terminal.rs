@@ -40,9 +40,9 @@ fn await_directory(path: &std::path::Path, expected: &std::path::Path) {
 }
 
 #[test]
-fn pane_shells_keep_their_directory_and_session_when_hidden() {
+fn pane_shells_keep_their_session_when_reopened_in_the_same_directory() {
     gtk_test(
-        "ui::window::composition::tabs::tests::panes::terminal::pane_shells_keep_their_directory_and_session_when_hidden",
+        "ui::window::composition::tabs::tests::panes::terminal::pane_shells_keep_their_session_when_reopened_in_the_same_directory",
         || {
             let split = Split::open();
             let content = split.content();
@@ -54,14 +54,43 @@ fn pane_shells_keep_their_directory_and_session_when_hidden() {
             await_directory(&marker, &split.root.path().join("left"));
             split.key(Key::F4, M::empty());
             assert!(!main.terminal.widget.is_visible());
-            load(&split.main(), split.folder("right"));
             split.key(Key::F4, M::empty());
+            let first = terminal(&main);
             command(
                 &first,
                 "printf '%s' \"$STRATA_SESSION\" > terminal-reopened",
             );
             let retained = split.root.path().join("left/terminal-reopened");
             await_contents(retained, b"kept");
+            split.window.destroy();
+        },
+    );
+}
+
+#[test]
+fn reopened_terminals_start_in_the_gui_directory_and_keep_other_panes_independent() {
+    gtk_test(
+        "ui::window::composition::tabs::tests::panes::terminal::reopened_terminals_start_in_the_gui_directory_and_keep_other_panes_independent",
+        || {
+            let split = Split::open();
+            let content = split.content();
+            let main = content.panes.main().clone();
+            content.header.terminal.emit_clicked();
+            let first = terminal(&main);
+            command(&first, "pwd > terminal-started");
+            await_directory(
+                &split.root.path().join("left/terminal-started"),
+                &split.root.path().join("left"),
+            );
+            split.key(Key::F4, M::empty());
+            load(&split.main(), split.folder("right"));
+            split.key(Key::F4, M::empty());
+            let first = terminal(&main);
+            command(&first, "pwd > terminal-reopened");
+            await_directory(
+                &split.root.path().join("right/terminal-reopened"),
+                &split.root.path().join("right"),
+            );
             content.header.extra_pane.emit_clicked();
             let extra = content.panes.active();
             extra.terminal.button.emit_clicked();
@@ -92,6 +121,14 @@ fn hidden_terminal_jobs_block_closing_and_window_disposal_stops_the_shell() {
             command(&shell, "echo $$ > shell-pid; sleep 120");
             let pid_file = split.root.path().join("left/shell-pid");
             wait_until(|| pid_file.exists() && content.has_terminal_jobs());
+            content.header.terminal.emit_clicked();
+            load(&split.main(), split.folder("right"));
+            content.header.terminal.emit_clicked();
+            terminal(content.panes.main());
+            assert!(
+                content.has_terminal_jobs(),
+                "reopening in a new folder must retain the running job"
+            );
             content.header.terminal.emit_clicked();
             assert!(!content.panes.main().terminal.widget.is_visible());
             split.tabs.close(0);

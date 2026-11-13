@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: MIT
 
-use std::{os::fd::AsRawFd, path::PathBuf, rc::Rc};
+use std::{
+    os::{fd::AsRawFd, unix::fs::MetadataExt},
+    path::PathBuf,
+    rc::Rc,
+};
 
 use gtk::{gio, glib, prelude::*};
 use vte4::prelude::*;
@@ -14,6 +18,37 @@ struct Launch {
 }
 
 impl PaneTerminal {
+    pub(super) fn follow_directory(self: &Rc<Self>) {
+        let Some(pid) = self.pid.get() else {
+            return;
+        };
+        let Some(path) = self
+            .view
+            .browser()
+            .active_location()
+            .and_then(|location| location.native_path().map(PathBuf::from))
+        else {
+            return;
+        };
+        if self.starting.replace(true) {
+            return;
+        }
+        let weak = Rc::downgrade(self);
+        glib::MainContext::default().spawn_local(async move {
+            let restart = gio::spawn_blocking(move || idle_in_another_directory(pid, path))
+                .await
+                .unwrap_or(false);
+            let Some(state) = weak.upgrade() else {
+                return;
+            };
+            state.starting.set(false);
+            if restart && state.pid.get() == Some(pid) && !state.cancellable.is_cancelled() {
+                state.restart_on_exit.set(true);
+                terminate(pid);
+            }
+        });
+    }
+
     pub(super) fn start(self: &Rc<Self>) {
         if self.starting.replace(true) {
             return;
@@ -100,18 +135,7 @@ impl PaneTerminal {
     }
 
     pub(in crate::ui::window::composition) fn has_jobs(&self) -> bool {
-        self.pid.get().is_some_and(|pid| {
-            let tasks_dir = format!("/proc/{}/task", pid.0);
-            if let Ok(entries) = std::fs::read_dir(&tasks_dir) {
-                entries.flatten().any(|entry| {
-                    std::fs::read_to_string(entry.path().join("children"))
-                        .is_ok_and(|children| !children.trim().is_empty())
-                })
-            } else {
-                std::fs::read_to_string(format!("/proc/{0}/task/{0}/children", pid.0))
-                    .is_ok_and(|children| !children.trim().is_empty())
-            }
-        })
+        self.pid.get().is_some_and(pid_has_jobs)
     }
 
     pub(in crate::ui::window::composition) fn shutdown(&self) {
@@ -120,6 +144,29 @@ impl PaneTerminal {
             terminate(pid);
         }
         self.directory.borrow_mut().take();
+    }
+}
+
+fn idle_in_another_directory(pid: glib::Pid, path: PathBuf) -> bool {
+    let Ok(shown) = std::fs::metadata(path) else {
+        return false;
+    };
+    let Ok(current) = std::fs::metadata(format!("/proc/{}/cwd", pid.0)) else {
+        return false;
+    };
+    (shown.dev(), shown.ino()) != (current.dev(), current.ino()) && !pid_has_jobs(pid)
+}
+
+fn pid_has_jobs(pid: glib::Pid) -> bool {
+    let tasks_dir = format!("/proc/{}/task", pid.0);
+    if let Ok(entries) = std::fs::read_dir(&tasks_dir) {
+        entries.flatten().any(|entry| {
+            std::fs::read_to_string(entry.path().join("children"))
+                .is_ok_and(|children| !children.trim().is_empty())
+        })
+    } else {
+        std::fs::read_to_string(format!("/proc/{0}/task/{0}/children", pid.0))
+            .is_ok_and(|children| !children.trim().is_empty())
     }
 }
 

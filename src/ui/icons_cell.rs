@@ -166,13 +166,17 @@ pub(super) fn fit_compact_name(label: &gtk::Inscription, name: &str) {
 
 fn fit_compact_name_with_preference(label: &gtk::Inscription, name: &str, full_names: bool) {
     let chars = i32::try_from(name.chars().count()).unwrap_or(i32::MAX);
+    let text = label.create_pango_layout(Some(name));
+    text.set_attributes(label.attributes().as_ref());
+    let (text_width, text_height) = text.pixel_size();
+    let (horizontal, vertical) = layout::label_insets(label);
+    // Inscription's line metrics only account for the primary font, not taller fallback glyphs.
+    let height = text_height.saturating_add(vertical);
+    if label.height_request() != height {
+        label.set_height_request(height);
+    }
     let width = if full_names {
-        let text = label.create_pango_layout(Some(name));
-        text.set_attributes(label.attributes().as_ref());
-        text.pixel_size()
-            .0
-            .saturating_add(layout::label_insets(label).0)
-            .saturating_add(1)
+        text_width.saturating_add(horizontal).saturating_add(1)
     } else {
         -1
     };

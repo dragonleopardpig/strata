@@ -1,4 +1,4 @@
-{"scenario":"terminal-keeps-shell-shortcuts","modes":["list"],"layout":"us","prefs":{"single_click_previews":false},"quality":{"impact":3,"coverage":4,"criticality":4,"diagnostic":4,"score":49,"note":"F4 routes real Ctrl+C/W/L to the shell and returns file keys on hide; shell/session GTK tests do not inject key events"}}
+{"scenario":"terminal-keeps-shell-shortcuts","modes":["list"],"layout":"us","prefs":{"single_click_previews":false},"quality":{"impact":3,"coverage":4,"criticality":4,"diagnostic":4,"score":49,"note":"Real Ctrl+C/W/L and F4 reopen in the GUI folder; GTK session tests feed commands instead of injecting keyboard input"}}
 {"wait":{"entries":{"contains":["documents","pictures"]}},"message":"the initial folder to finish listing"}
 {"key":"F4"}
 {"wait":{"present":{"role":"*","name":"Terminal","states":["focused"]}},"message":"F4 to focus the pane terminal"}
@@ -20,5 +20,17 @@
 {"fs":{"path":"shell-clear","text":"cleared"},"message":"Ctrl+L to clear the terminal rather than open Strata's location editor"}
 {"key":"F4"}
 {"wait":{"absent":{"role":"*","name":"Terminal","states":["focused"]}},"message":"F4 to hide the terminal and return keyboard focus to the file listing"}
+{"key":"ctrl+l"}
+{"wait":{"field":{"name":"Location (Ctrl+L)"}},"message":"the location bar to open after hiding the terminal"}
+{"type":"$fixture/documents"}
+{"key":"Return"}
+{"wait":{"directory":"documents"},"message":"the GUI to navigate to documents"}
+{"key":"F4"}
+{"wait":{"present":{"role":"*","name":"Terminal","states":["focused"]}},"message":"the terminal to reopen in the new GUI folder"}
+{"type":"printf followed > terminal-followed"}
+{"key":"Return"}
+{"fs":{"path":"documents/terminal-followed","text":"followed"},"message":"the reopened terminal to use the GUI folder instead of its first directory"}
+{"key":"F4"}
+{"wait":{"absent":{"role":"*","name":"Terminal","states":["focused"]}},"message":"the terminal to hide again"}
 {"key":"F3"}
-{"wait":{"panes":["$root","$root"]},"message":"file-pane shortcuts to work again after hiding the terminal"}
+{"wait":{"panes":["documents","documents"]},"message":"file-pane shortcuts to work again after hiding the terminal"}

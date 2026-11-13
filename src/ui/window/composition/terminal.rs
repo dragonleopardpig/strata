@@ -25,6 +25,7 @@ pub(super) struct PaneTerminal {
     retry: gtk::Button,
     pid: Cell<Option<glib::Pid>>,
     starting: Cell<bool>,
+    restart_on_exit: Cell<bool>,
     cancellable: gio::Cancellable,
     directory: RefCell<Option<std::fs::File>>,
 }
@@ -81,6 +82,7 @@ impl PaneTerminal {
             retry,
             pid: Cell::new(None),
             starting: Cell::new(false),
+            restart_on_exit: Cell::new(false),
             cancellable: gio::Cancellable::new(),
             directory: RefCell::new(None),
         });
@@ -111,7 +113,11 @@ impl PaneTerminal {
                 state.pid.set(None);
                 state.directory.borrow_mut().take();
                 if !state.cancellable.is_cancelled() {
-                    state.hide();
+                    if state.restart_on_exit.replace(false) {
+                        state.start();
+                    } else {
+                        state.hide();
+                    }
                 }
             }
         });
@@ -124,13 +130,16 @@ impl PaneTerminal {
         }
         self.widget.set_visible(true);
         self.terminal.grab_focus();
-        if !self.is_running() {
+        if self.pid.get().is_some() {
+            self.follow_directory();
+        } else {
             self.start();
         }
     }
 
+    #[cfg(test)]
     pub(in crate::ui::window::composition) fn is_running(&self) -> bool {
-        self.pid.get().is_some()
+        self.pid.get().is_some() && !self.starting.get() && !self.restart_on_exit.get()
     }
 
     fn hide(&self) {
