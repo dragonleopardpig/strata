@@ -46,6 +46,7 @@ const APPLICATION_ID: &str = "io.github.lgse.Strata";
 const CAIRO_SELECTED_BY_STRATA: &str = "STRATA_CAIRO_SELECTED_BY_STRATA";
 const GVFS_PROBE_ARGUMENT: &str = "--gvfs-probe";
 const GVFS_PROBE_TIMEOUT: Duration = Duration::from_secs(2);
+const GVFS_PROBE_ATTEMPTS: usize = 2;
 const GIO_FALLBACK_BACKENDS: [(&str, &str); 2] =
     [("GIO_USE_VFS", "local"), ("GIO_USE_VOLUME_MONITOR", "unix")];
 
@@ -634,15 +635,22 @@ fn restart_with_local_vfs_if_gvfs_is_unresponsive() {
     let Ok(executable) = std::env::current_exe() else {
         return;
     };
-    let responsive = sandbox_helper::run_command_with_timeout(
-        std::process::Command::new(&executable)
-            .arg(GVFS_PROBE_ARGUMENT)
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null()),
-        GVFS_PROBE_TIMEOUT,
-    )
-    .unwrap_or(true);
+    // The first GIO client of a session activates every volume monitor
+    // (udisks2, MTP, gphoto2, GOA, AFC) over D-Bus, which can outlast the
+    // timeout while udisks is still mounting disks at login. Those monitors
+    // keep starting after the probe is killed, so a second attempt finds them
+    // running; a daemon that is really wedged fails both.
+    let responsive = (0..GVFS_PROBE_ATTEMPTS).any(|_| {
+        sandbox_helper::run_command_with_timeout(
+            std::process::Command::new(&executable)
+                .arg(GVFS_PROBE_ARGUMENT)
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null()),
+            GVFS_PROBE_TIMEOUT,
+        )
+        .unwrap_or(true)
+    });
     if responsive {
         write_gvfs_probe_marker();
         return;
@@ -681,14 +689,18 @@ fn gvfs_daemon_pids(proc_root: &std::path::Path) -> Vec<u32> {
             continue;
         };
         let comm = entry.path().join("comm");
-        if std::fs::read_to_string(comm)
-            .is_ok_and(|contents| contents.trim_end().starts_with("gvfsd"))
-        {
+        if std::fs::read_to_string(comm).is_ok_and(|contents| is_gvfs_daemon_comm(&contents)) {
             pids.push(pid);
         }
     }
     pids.sort_unstable();
     pids
+}
+
+/// Nix and Guix wrap binaries as `.<name>-wrapped`, so NixOS shows the daemon
+/// as `.gvfsd-wrapped` and its helpers as e.g. `.gvfsd-fuse-wra` (truncated).
+fn is_gvfs_daemon_comm(comm: &str) -> bool {
+    comm.trim_end().trim_start_matches('.').starts_with("gvfsd")
 }
 
 fn encode_daemon_pids(pids: &[u32]) -> String {

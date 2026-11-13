@@ -253,6 +253,20 @@ fn daemon_identity_lists_gvfs_processes_sorted() {
 }
 
 #[test]
+fn daemon_identity_recognizes_wrapped_nix_binaries() {
+    let root = fake_proc(
+        "identity-wrapped",
+        &[
+            ("3689", ".gvfsd-wrapped\n"),
+            ("3761", ".gvfsd-fuse-wra\n"),
+            ("14297", ".gvfs-udisks2-v\n"),
+            ("31", ".bash-wrapped\n"),
+        ],
+    );
+    assert_eq!(gvfs_daemon_pids(&root), vec![3689, 3761]);
+}
+
+#[test]
 fn daemon_restart_changes_the_identity() {
     let before = fake_proc("restart-before", &[("100", "gvfsd\n")]);
     let after = fake_proc("restart-after", &[("8400", "gvfsd\n")]);
